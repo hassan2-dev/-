@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "a0-project",
-    "slug": "snack-d35c0e59-b6e6-40e5-a871-d90fed8166c6",
+    "name": "تفاحة",
+    "slug": "tufaha-store",
+    "owner": "hassune21",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,9 +14,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hassune21.tufaha",
+      "infoPlist": {
+        "CFBundleDisplayName": "تفاحة",
+        "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغك بتحديثات حالة طلباتك.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.hassune21.tufaha",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -36,6 +44,11 @@
           "color": "#3D9B4F"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1767f9db-925b-4a14-b0b2-1c8e68ab658f"
+      }
+    }
   }
 }
