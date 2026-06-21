@@ -20,6 +20,7 @@ import ProductDetailScreen from './screens/ProductDetailScreen';
 import CartScreen from './screens/CartScreen';
 import PrivacyPolicyScreen from './screens/PrivacyPolicyScreen';
 import AboutAppScreen from './screens/AboutAppScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 
 if (!I18nManager.isRTL) {
   I18nManager.allowRTL(true);
@@ -142,6 +143,7 @@ function AppNavigator() {
           />
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
           <Stack.Screen name="AboutApp" component={AboutAppScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
         </>
       )}
     </Stack.Navigator>

@@ -78,19 +78,37 @@ const formatOrderDateTime = (value) => {
 
 const getOrderStatusLabel = (status) => ORDER_STATUS_LABELS[status] || status || 'غير معروف';
 
+const escapeHtml = (str) => {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+};
+
+const jsStr = (str) => String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+const emptyState = (icon, text) =>
+    `<div class="empty-state"><i class="fa-solid ${icon}"></i><p>${text}</p></div>`;
+
+const loadingState = () =>
+    `<div class="loading-state"><i class="fa-solid fa-spinner fa-spin"></i><p>جاري التحميل...</p></div>`;
+
 const buildOrderActionButtons = (id, status, reloadStatus) => {
     const buttons = [];
     if (status === 'pending') {
-        buttons.push(`<button class="btn-action accept" onclick="window.updateOrderStatus('${id}', 'accepted', '${reloadStatus}')">موافقة</button>`);
-        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'preparing', '${reloadStatus}')">قيد التجهيز</button>`);
-        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')">في التوصيل</button>`);
+        buttons.push(`<button class="btn-action accept" onclick="window.updateOrderStatus('${id}', 'accepted', '${reloadStatus}')"><i class="fa-solid fa-check"></i> موافقة</button>`);
+        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'preparing', '${reloadStatus}')"><i class="fa-solid fa-kitchen-set"></i> تجهيز</button>`);
+        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')"><i class="fa-solid fa-truck"></i> توصيل</button>`);
     } else if (status === 'accepted') {
-        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'preparing', '${reloadStatus}')">قيد التجهيز</button>`);
-        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')">في التوصيل</button>`);
+        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'preparing', '${reloadStatus}')"><i class="fa-solid fa-kitchen-set"></i> تجهيز</button>`);
+        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')"><i class="fa-solid fa-truck"></i> توصيل</button>`);
     } else if (status === 'preparing') {
-        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')">في التوصيل</button>`);
+        buttons.push(`<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')"><i class="fa-solid fa-truck"></i> توصيل</button>`);
     }
-    buttons.push(`<button class="btn-action delete" onclick="deleteDocItem('orders', '${id}', null, () => window.loadOrders('${reloadStatus}'))">حذف</button>`);
+    buttons.push(`<button class="btn-action delete" onclick="deleteDocItem('orders', '${id}', null, () => window.loadOrders('${reloadStatus}'))"><i class="fa-solid fa-trash"></i> حذف</button>`);
     return buttons.join(' ');
 };
 
@@ -185,8 +203,8 @@ window.verifyAdmin = () => {
         document.getElementById('login-overlay').style.opacity = '0';
         setTimeout(() => {
             document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('app-content').style.display = 'flex';
-            loadOrders('pending');
+            document.getElementById('app-content').style.display = 'block';
+            switchTab('orders');
         }, 500);
     } else { alert('رمز الدخول غير صحيح!'); }
 };
@@ -197,6 +215,8 @@ window.switchTab = (tabId) => {
     document.getElementById(tabId).classList.add('active');
     const activeNavItem = document.querySelector(`.nav-item[onclick*="switchTab('${tabId}')"]`);
     if (activeNavItem) activeNavItem.classList.add('active');
+    if (typeof window.setAdminPageTitle === 'function') window.setAdminPageTitle(tabId);
+    if (typeof window.toggleSidebar === 'function') window.toggleSidebar(false);
 
     if(tabId === 'categories') loadCategories();
     if(tabId === 'products') { loadCategoriesForSelect(); loadProducts(); }
@@ -240,12 +260,24 @@ window.saveCategory = async () => {
 
 window.loadCategories = async () => {
     const list = document.getElementById('categories-list');
-    list.innerHTML = 'جاري التحميل...';
+    list.innerHTML = loadingState();
     const snapshot = await getDocs(collection(db, "categories"));
     list.innerHTML = '';
+    if (snapshot.empty) {
+        list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام بعد');
+        return;
+    }
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        list.innerHTML += `<div class="card-3d"><img src="${data.image || ''}"><div class="card-title">${data.name}</div><button class="btn-action edit" onclick="editCategory('${docSnap.id}', '${data.name}')">تعديل</button><button class="btn-action delete" onclick="deleteDocItem('categories', '${docSnap.id}', null, loadCategories)">حذف</button></div>`;
+        const safeName = escapeHtml(data.name);
+        list.innerHTML += `<div class="card-3d">
+            <img src="${escapeHtml(data.image || '')}" alt="${safeName}" onerror="this.style.display='none'">
+            <div class="card-title">${safeName}</div>
+            <div class="card-actions">
+                <button class="btn-action edit" onclick="editCategory('${docSnap.id}', '${jsStr(data.name)}')"><i class="fa-solid fa-pen"></i> تعديل</button>
+                <button class="btn-action delete" onclick="deleteDocItem('categories', '${docSnap.id}', null, loadCategories)"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>
+        </div>`;
     });
 };
 
@@ -307,13 +339,29 @@ window.saveProduct = async () => {
 
 window.loadProducts = async () => {
     const list = document.getElementById('products-list');
-    list.innerHTML = 'جاري التحميل...';
+    list.innerHTML = loadingState();
     const snapshot = await getDocs(collection(db, "products"));
     list.innerHTML = '';
+    if (snapshot.empty) {
+        list.innerHTML = emptyState('fa-box', 'لا توجد منتجات بعد');
+        return;
+    }
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const imgSrc = (data.images && data.images.length > 0) ? data.images[0].data : (data.image1 || data.image || '');
-        list.innerHTML += `<div class="card-3d"><img src="${imgSrc}"><div class="card-title">${data.name}</div><div style="color:#FF6B6B;">${data.price} د.ع</div><button class="btn-action edit" onclick="editProduct('${docSnap.id}', '${data.name}', '${data.category}', '${data.desc}', '${data.price}')">تعديل</button><button class="btn-action delete" onclick="deleteDocItem('products', '${docSnap.id}', null, loadProducts)">حذف</button></div>`;
+        const safeName = escapeHtml(data.name);
+        const safeCat = escapeHtml(data.category || '');
+        const safeDesc = escapeHtml(data.desc || '');
+        list.innerHTML += `<div class="card-3d">
+            <img src="${escapeHtml(imgSrc)}" alt="${safeName}" onerror="this.style.display='none'">
+            <div class="card-title">${safeName}</div>
+            <div class="card-price">${Number(data.price).toLocaleString('ar-IQ')} د.ع</div>
+            ${safeCat ? `<div style="font-size:0.78rem;color:#94A396;margin-bottom:4px">${safeCat}</div>` : ''}
+            <div class="card-actions">
+                <button class="btn-action edit" onclick="editProduct('${docSnap.id}', '${jsStr(data.name)}', '${jsStr(data.category)}', '${jsStr(data.desc)}', '${data.price}')"><i class="fa-solid fa-pen"></i> تعديل</button>
+                <button class="btn-action delete" onclick="deleteDocItem('products', '${docSnap.id}', null, loadProducts)"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>
+        </div>`;
     });
 };
 
@@ -331,21 +379,41 @@ window.editProduct = (id, name, cat, desc, price) => {
 window.loadDiscountProducts = async () => {
     const selectList = document.getElementById('discount-products-select-list');
     const discountList = document.getElementById('discounted-products-list');
-    selectList.innerHTML = 'جاري التحميل...';
+    selectList.innerHTML = loadingState();
     discountList.innerHTML = '';
     const snapshot = await getDocs(collection(db, "products"));
     allProducts = [];
     selectList.innerHTML = '';
+    let hasSelectable = false;
+    let hasDiscounted = false;
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
         allProducts.push({ id: docSnap.id, ...data });
         const imgSrc = (data.images && data.images.length > 0) ? data.images[0].data : (data.image1 || '');
+        const safeName = escapeHtml(data.name);
         if (!data.hasDiscount) {
-            selectList.innerHTML += `<div class="card-3d" style="padding:10px;"><input type="checkbox" class="discount-checkbox" value="${docSnap.id}"><img src="${imgSrc}" style="height:80px;"><div style="font-size:0.9rem;">${data.name}</div></div>`;
+            hasSelectable = true;
+            selectList.innerHTML += `<label class="card-3d discount-select-card">
+                <input type="checkbox" class="discount-checkbox" value="${docSnap.id}">
+                <img src="${escapeHtml(imgSrc)}" alt="${safeName}" onerror="this.style.display='none'">
+                <div class="card-title" style="font-size:0.85rem">${safeName}</div>
+                <div class="card-price">${Number(data.price).toLocaleString('ar-IQ')} د.ع</div>
+            </label>`;
         } else {
-            discountList.innerHTML += `<div class="card-3d"><img src="${imgSrc}"><div class="card-title">${data.name}</div><div style="text-decoration:line-through; color:#999;">${data.originalPrice} د.ع</div><div style="color:#2ecc71;">${data.price} د.ع (-${data.discountPercent}%)</div><button class="btn-action remove-discount" onclick="removeDiscount('${docSnap.id}', ${data.originalPrice})">إلغاء الخصم</button></div>`;
+            hasDiscounted = true;
+            discountList.innerHTML += `<div class="card-3d">
+                <img src="${escapeHtml(imgSrc)}" alt="${safeName}">
+                <div class="card-title">${safeName}</div>
+                <div class="card-price-old">${Number(data.originalPrice).toLocaleString('ar-IQ')} د.ع</div>
+                <div class="card-price-discount">${Number(data.price).toLocaleString('ar-IQ')} د.ع (-${data.discountPercent}%)</div>
+                <div class="card-actions">
+                    <button class="btn-action remove-discount" onclick="removeDiscount('${docSnap.id}', ${data.originalPrice})"><i class="fa-solid fa-xmark"></i> إلغاء الخصم</button>
+                </div>
+            </div>`;
         }
     });
+    if (!hasSelectable) selectList.innerHTML = emptyState('fa-percent', 'كل المنتجات لديها خصم أو لا توجد منتجات');
+    if (!hasDiscounted) discountList.innerHTML = emptyState('fa-tag', 'لا توجد منتجات بخصم حالياً');
 };
 
 window.applyDiscountToSelected = async () => {
@@ -409,10 +477,20 @@ window.saveOffer = async () => {
 
 window.loadOffers = async () => {
     const list = document.getElementById('offers-list');
+    list.innerHTML = loadingState();
     const snapshot = await getDocs(collection(db, "offers"));
     list.innerHTML = '';
+    if (snapshot.empty) {
+        list.innerHTML = emptyState('fa-tags', 'لا توجد عروض بعد');
+        return;
+    }
     snapshot.forEach(docSnap => {
-        list.innerHTML += `<div class="card-3d"><img src="${docSnap.data().image}"><button class="btn-action delete" onclick="deleteDocItem('offers', '${docSnap.id}', null, loadOffers)">حذف</button></div>`;
+        list.innerHTML += `<div class="card-3d">
+            <img src="${escapeHtml(docSnap.data().image)}" alt="عرض">
+            <div class="card-actions">
+                <button class="btn-action delete" onclick="deleteDocItem('offers', '${docSnap.id}', null, loadOffers)"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>
+        </div>`;
     });
 };
 
@@ -439,56 +517,98 @@ window.saveBanner = async () => {
 
 window.loadBanners = async () => {
     const list = document.getElementById('banners-list');
+    list.innerHTML = loadingState();
     const snapshot = await getDocs(collection(db, "banners"));
     list.innerHTML = '';
+    if (snapshot.empty) {
+        list.innerHTML = emptyState('fa-image', 'لا توجد بنرات بعد');
+        return;
+    }
     snapshot.forEach(docSnap => {
-        list.innerHTML += `<div class="card-3d"><img src="${docSnap.data().image}"><button class="btn-action delete" onclick="deleteDocItem('banners', '${docSnap.id}', null, loadBanners)">حذف</button></div>`;
+        list.innerHTML += `<div class="card-3d">
+            <img src="${escapeHtml(docSnap.data().image)}" alt="بنر">
+            <div class="card-actions">
+                <button class="btn-action delete" onclick="deleteDocItem('banners', '${docSnap.id}', null, loadBanners)"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>
+        </div>`;
     });
 };
 
 // === إدارة الطلبات والمبيعات ===
 window.loadOrders = async (status) => {
     const list = document.getElementById(status === 'pending' ? 'orders-list' : 'accepted-orders-list');
+    list.innerHTML = loadingState();
     const q = status === 'pending'
         ? query(collection(db, "orders"), where("status", "==", "pending"))
         : query(collection(db, "orders"), where("status", "in", ACTIVE_ORDER_STATUSES));
 
     const snapshot = await getDocs(q);
     list.innerHTML = '';
+    if (snapshot.empty) {
+        list.innerHTML = emptyState(
+            status === 'pending' ? 'fa-inbox' : 'fa-truck',
+            status === 'pending' ? 'لا توجد طلبات قيد الانتظار' : 'لا توجد طلبات نشطة'
+        );
+        return;
+    }
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
         let itemsHtml = '';
         data.items?.forEach(item => {
-            itemsHtml += `<div style="display:flex; gap:10px; margin-bottom:5px;"><img src="${item.image}" style="width:40px;height:40px;border-radius:5px;"><span>${item.name} (${item.qty})</span></div>`;
+            itemsHtml += `<div class="order-item-row">
+                <img src="${escapeHtml(item.image || '')}" alt="" onerror="this.style.display='none'">
+                <span>${escapeHtml(item.name)} <strong>×${item.qty}</strong></span>
+            </div>`;
         });
 
-        const createdAtHtml = `<div><strong>تاريخ الطلب:</strong> ${formatOrderDateTime(data.createdAt)}</div>`;
-        const updatedAtHtml = data.statusUpdatedAt ? `<div><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : '';
         const addressValue = data.address || data.Address || data.location || data.Location;
-        const addressHtml = addressValue ? `<div><strong>العنوان:</strong> ${addressValue}</div>` : `<div><strong>العنوان:</strong> غير متوفر</div>`;
-        const statusHtml = `<div><strong>الحالة:</strong> ${getOrderStatusLabel(data.status)}</div>`;
+        const statusClass = data.status || 'pending';
 
-        list.innerHTML += `<div class="card-3d" style="text-align:right;">
-            <div><strong>الاسم:</strong> ${data.name}</div>
-            <div><strong>الهاتف:</strong> ${data.phone}</div>
-            ${addressHtml}
-            ${statusHtml}
-            ${createdAtHtml}
-            ${updatedAtHtml}
-            <div style="margin:10px 0;">${itemsHtml}</div>
-            <div style="color:#FF6B6B;">الإجمالي: ${data.total} د.ع</div>
-            <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end;">
-                ${buildOrderActionButtons(docSnap.id, data.status, status)}
+        list.innerHTML += `<div class="card-3d order-card">
+            <div class="order-card-header">
+                <div>
+                    <div class="card-title" style="text-align:right;margin-bottom:4px">${escapeHtml(data.name)}</div>
+                    <div class="order-meta"><i class="fa-solid fa-phone"></i> ${escapeHtml(data.phone)}</div>
+                </div>
+                <span class="order-status ${statusClass}">${getOrderStatusLabel(data.status)}</span>
             </div>
+            <div class="order-meta"><strong>العنوان:</strong> ${escapeHtml(addressValue || 'غير متوفر')}</div>
+            <div class="order-meta"><strong>تاريخ الطلب:</strong> ${formatOrderDateTime(data.createdAt)}</div>
+            ${data.statusUpdatedAt ? `<div class="order-meta"><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : ''}
+            <div class="order-items">${itemsHtml || '<div class="order-meta">لا توجد تفاصيل</div>'}</div>
+            <div class="order-total">الإجمالي: ${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع</div>
+            <div class="order-actions">${buildOrderActionButtons(docSnap.id, data.status, status)}</div>
         </div>`;
     });
 };
 
 window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => {
+    const orderSnap = await getDoc(doc(db, "orders", id));
+    const orderData = orderSnap.data() || {};
+
     await updateDoc(doc(db, "orders", id), {
         status: nextStatus,
         statusUpdatedAt: serverTimestamp()
     });
+
+    const NOTIF_MSG = {
+        accepted: { title: 'تم قبول طلبك ✅', body: 'تمت الموافقة على طلبك وسيتم تجهيزه قريباً' },
+        preparing: { title: 'جاري تجهيز طلبك 👨‍🍳', body: 'طلبك قيد التجهيز الآن' },
+        on_the_way: { title: 'طلبك في الطريق 🚚', body: 'السائق في طريقه إليك، استعد لاستلام الطلب' },
+    };
+    const msg = NOTIF_MSG[nextStatus];
+    if (msg && orderData.phone) {
+        await addDoc(collection(db, "notifications"), {
+            phone: orderData.phone,
+            orderId: id,
+            title: msg.title,
+            body: msg.body,
+            status: nextStatus,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    }
+
     window.showCustomAlert(`تم تغيير الحالة إلى: ${getOrderStatusLabel(nextStatus)}`);
     window.loadOrders(reloadStatus);
 };
@@ -499,11 +619,16 @@ window.acceptOrder = async (id) => {
 
 window.loadSales = async () => {
     const list = document.getElementById('sales-list');
+    list.innerHTML = loadingState();
     const q = query(collection(db, "orders"), where("status", "in", ACTIVE_ORDER_STATUSES));
     const snapshot = await getDocs(q);
     let total = 0;
     snapshot.forEach(docSnap => { total += docSnap.data().total || 0; });
-    list.innerHTML = `<div class="card-3d" style="background:#2ecc71; color:white;"><h3>إجمالي المبيعات</h3><h2>${total} د.ع</h2></div>`;
+    list.innerHTML = `<div class="sales-card card-3d">
+        <h3><i class="fa-solid fa-sack-dollar"></i> إجمالي المبيعات النشطة</h3>
+        <h2>${total.toLocaleString('ar-IQ')} د.ع</h2>
+        <p style="margin-top:0.75rem;opacity:0.85;font-size:0.85rem">${snapshot.size} طلب نشط</p>
+    </div>`;
 };
 
 window.resetSales = async () => {

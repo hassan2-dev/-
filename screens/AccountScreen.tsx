@@ -30,7 +30,7 @@ const LEGACY_PROFILE_KEY = 'user_profile';
 
 export default function AccountScreen() {
   const navigation = useNavigation<any>();
-  const { logout, showToast, userPhone, clearCacheAndRefresh } = useApp();
+  const { logout, showToast, userPhone, clearCacheAndRefresh, unreadNotificationCount } = useApp();
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -73,11 +73,19 @@ export default function AccountScreen() {
 
   const menuItems = [
     {
+      icon: 'notifications-outline' as const,
+      label: unreadNotificationCount > 0
+        ? `الإشعارات (${unreadNotificationCount})`
+        : 'الإشعارات',
+      onPress: () => navigation.navigate('Notifications'),
+    },
+    {
       icon: 'refresh-outline' as const,
       label: 'تحديث البيانات (مسح الكاش)',
       onPress: () => clearCacheAndRefresh(),
     },
     {
+      icon: 'chatbubble-ellipses-outline' as const,
       label: 'تواصل معنا',
       onPress: () => Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}`),
     },

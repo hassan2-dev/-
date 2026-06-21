@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة إدارة تفاحة</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="./admin.css" />
+</head>
+<body>
+  <!-- تسجيل الدخول -->
+  <div id="login-overlay">
+    <div class="login-box">
+      <div class="login-logo">🍎</div>
+      <h1>تفاحة</h1>
+      <p>لوحة إدارة المتجر الإلكتروني</p>
+      <label class="field-label" for="admin-pass">رمز الدخول</label>
+      <input
+        type="password"
+        id="admin-pass"
+        placeholder="••••"
+        autocomplete="off"
+        onkeydown="if(event.key==='Enter')verifyAdmin()"
+      />
+      <button class="btn-primary" style="width:100%" onclick="verifyAdmin()">
+        <i class="fa-solid fa-right-to-bracket"></i> دخول
+      </button>
+    </div>
+  </div>
+
+  <div id="app-content">
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+
+    <div class="app-shell">
+      <!-- الشريط الجانبي -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <h1>🍎 تفاحة</h1>
+          <span>لوحة الإدارة</span>
+        </div>
+
+        <nav class="sidebar-nav">
+          <div class="nav-group-label">الطلبات</div>
+          <button class="nav-item active" onclick="switchTab('orders')">
+            <i class="fa-solid fa-clock"></i> قيد الانتظار
+          </button>
+          <button class="nav-item" onclick="switchTab('accepted-orders')">
+            <i class="fa-solid fa-truck"></i> طلبات نشطة
+          </button>
+          <button class="nav-item" onclick="switchTab('sales')">
+            <i class="fa-solid fa-chart-line"></i> المبيعات
+          </button>
+
+          <div class="nav-group-label">المتجر</div>
+          <button class="nav-item" onclick="switchTab('categories')">
+            <i class="fa-solid fa-layer-group"></i> الأقسام
+          </button>
+          <button class="nav-item" onclick="switchTab('products')">
+            <i class="fa-solid fa-box"></i> المنتجات
+          </button>
+          <button class="nav-item" onclick="switchTab('discount-offers')">
+            <i class="fa-solid fa-percent"></i> الخصومات
+          </button>
+
+          <div class="nav-group-label">التسويق</div>
+          <button class="nav-item" onclick="switchTab('offers')">
+            <i class="fa-solid fa-tags"></i> العروض
+          </button>
+          <button class="nav-item" onclick="switchTab('banners')">
+            <i class="fa-solid fa-image"></i> البنرات
+          </button>
+        </nav>
+      </aside>
+
+      <!-- المحتوى الرئيسي -->
+      <div class="main-area">
+        <header class="topbar">
+          <div style="display:flex;align-items:center;gap:0.75rem">
+            <button class="menu-toggle" onclick="toggleSidebar(true)" aria-label="القائمة">
+              <i class="fa-solid fa-bars"></i>
+            </button>
+            <div>
+              <div class="topbar-title" id="page-title">طلبات قيد الانتظار</div>
+              <div class="topbar-sub" id="page-sub">إدارة طلبات الزبائن</div>
+            </div>
+          </div>
+          <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
+        </header>
+
+        <main>
+          <!-- الطلبات -->
+          <div id="orders" class="tab-content active">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-clock"></i>
+                <h2>طلبات قيد الانتظار</h2>
+              </div>
+              <div id="orders-list" class="cards-grid wide"></div>
+            </div>
+          </div>
+
+          <!-- طلبات نشطة -->
+          <div id="accepted-orders" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-truck-fast"></i>
+                <h2>الطلبات المقبولة والنشطة</h2>
+              </div>
+              <div id="accepted-orders-list" class="cards-grid wide"></div>
+            </div>
+          </div>
+
+          <!-- الأقسام -->
+          <div id="categories" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-plus"></i>
+                <h2>إضافة أو تعديل قسم</h2>
+              </div>
+              <input type="hidden" id="cat-id" />
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="cat-name">اسم القسم</label>
+                  <input type="text" id="cat-name" placeholder="مثال: خضروات" />
+                </div>
+                <div class="form-field">
+                  <label for="cat-img">صورة القسم</label>
+                  <div class="file-field">
+                    <input type="file" id="cat-img" accept="image/*" />
+                    <div class="file-field-hint">JPG أو PNG — يُفضّل مربعة</div>
+                  </div>
+                </div>
+              </div>
+              <button id="btn-save-cat" class="btn-primary" onclick="saveCategory()">
+                حفظ القسم <i class="fa-solid fa-save"></i>
+              </button>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-list"></i>
+                <h2>الأقسام الحالية</h2>
+              </div>
+              <div id="categories-list" class="cards-grid"></div>
+            </div>
+          </div>
+
+          <!-- المنتجات -->
+          <div id="products" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-plus"></i>
+                <h2>إضافة أو تعديل منتج</h2>
+              </div>
+              <input type="hidden" id="prod-id" />
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="prod-name">اسم المنتج</label>
+                  <input type="text" id="prod-name" placeholder="اسم المنتج" />
+                </div>
+                <div class="form-field">
+                  <label for="prod-cat">القسم</label>
+                  <select id="prod-cat"><option value="">اختر القسم</option></select>
+                </div>
+                <div class="form-field">
+                  <label for="prod-price">السعر (د.ع)</label>
+                  <input type="number" id="prod-price" placeholder="0" min="0" />
+                </div>
+                <div class="form-field full">
+                  <label for="prod-desc">الوصف</label>
+                  <textarea id="prod-desc" placeholder="وصف مختصر للمنتج"></textarea>
+                </div>
+                <div class="form-field full">
+                  <label for="prod-images">صور المنتج</label>
+                  <div class="file-field">
+                    <input type="file" id="prod-images" accept="image/*" multiple />
+                    <div class="file-field-hint">يمكن اختيار صورتين كحد أقصى</div>
+                  </div>
+                </div>
+              </div>
+              <button id="btn-save-prod" class="btn-primary" onclick="saveProduct()">
+                حفظ المنتج <i class="fa-solid fa-save"></i>
+              </button>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-boxes-stacked"></i>
+                <h2>المنتجات الحالية</h2>
+              </div>
+              <div id="products-list" class="cards-grid"></div>
+            </div>
+          </div>
+
+          <!-- الخصومات -->
+          <div id="discount-offers" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-percent"></i>
+                <h2>تطبيق خصم على المنتجات</h2>
+              </div>
+              <div class="discount-toolbar">
+                <div class="form-field">
+                  <label for="discount-percent">نسبة الخصم %</label>
+                  <input type="number" id="discount-percent" placeholder="10" min="1" max="99" />
+                </div>
+                <button class="btn-primary" onclick="applyDiscountToSelected()">
+                  <i class="fa-solid fa-check"></i> تطبيق على المحدد
+                </button>
+              </div>
+              <div class="panel-header" style="border:none;padding-bottom:0.5rem;margin-bottom:0.75rem">
+                <i class="fa-solid fa-square-check"></i>
+                <h2>اختر منتجات للخصم</h2>
+              </div>
+              <div id="discount-products-select-list" class="cards-grid"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-tag"></i>
+                <h2>منتجات بخصم حالياً</h2>
+              </div>
+              <div id="discounted-products-list" class="cards-grid"></div>
+            </div>
+          </div>
+
+          <!-- العروض -->
+          <div id="offers" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <h2>رفع عروض جديدة</h2>
+              </div>
+              <div class="form-field" style="margin-bottom:1rem">
+                <div class="file-field">
+                  <input type="file" id="offer-img" accept="image/*" multiple />
+                  <div class="file-field-hint">يمكن رفع عدة صور دفعة واحدة</div>
+                </div>
+              </div>
+              <button id="btn-save-offer" class="btn-primary" onclick="saveOffer()">
+                حفظ العروض <i class="fa-solid fa-save"></i>
+              </button>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-images"></i>
+                <h2>العروض الحالية</h2>
+              </div>
+              <div id="offers-list" class="cards-grid"></div>
+            </div>
+          </div>
+
+          <!-- البنرات -->
+          <div id="banners" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <h2>رفع بنرات جديدة</h2>
+              </div>
+              <div class="form-field" style="margin-bottom:1rem">
+                <div class="file-field">
+                  <input type="file" id="banner-img" accept="image/*" multiple />
+                  <div class="file-field-hint">صور عريضة للصفحة الرئيسية</div>
+                </div>
+              </div>
+              <button id="btn-save-banner" class="btn-primary" onclick="saveBanner()">
+                حفظ البنرات <i class="fa-solid fa-save"></i>
+              </button>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-panorama"></i>
+                <h2>البنرات الحالية</h2>
+              </div>
+              <div id="banners-list" class="cards-grid"></div>
+            </div>
+          </div>
+
+          <!-- المبيعات -->
+          <div id="sales" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-chart-pie"></i>
+                <h2>ملخص المبيعات</h2>
+              </div>
+              <div id="sales-list"></div>
+              <button class="btn-danger-outline" onclick="resetSales()">
+                <i class="fa-solid fa-trash-can"></i> تصفير المبيعات وحذف الطلبات النشطة
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PAGE_TITLES = {
+      orders: { title: 'طلبات قيد الانتظار', sub: 'مراجعة الطلبات الجديدة' },
+      'accepted-orders': { title: 'طلبات نشطة', sub: 'قيد التجهيز والتوصيل' },
+      categories: { title: 'الأقسام', sub: 'إدارة أقسام المتجر' },
+      products: { title: 'المنتجات', sub: 'إضافة وتعديل المنتجات' },
+      'discount-offers': { title: 'الخصومات', sub: 'تطبيق خصومات على المنتجات' },
+      offers: { title: 'العروض', sub: 'صور العروض الترويجية' },
+      banners: { title: 'البنرات', sub: 'بانرات الصفحة الرئيسية' },
+      sales: { title: 'المبيعات', sub: 'إجمالي الإيرادات' },
+    };
+
+    window.setAdminPageTitle = (tabId) => {
+      const info = PAGE_TITLES[tabId] || { title: 'لوحة الإدارة', sub: '' };
+      const titleEl = document.getElementById('page-title');
+      const subEl = document.getElementById('page-sub');
+      if (titleEl) titleEl.textContent = info.title;
+      if (subEl) subEl.textContent = info.sub;
+    };
+
+    window.toggleSidebar = (open) => {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if (!sidebar) return;
+      if (open) {
+        sidebar.classList.add('open');
+        overlay?.classList.add('visible');
+      } else {
+        sidebar.classList.remove('open');
+        overlay?.classList.remove('visible');
+      }
+    };
+  </script>
+  <script type="module" src="./app-updated.js"></script>
+</body>
+</html>

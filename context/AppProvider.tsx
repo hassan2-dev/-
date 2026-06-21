@@ -1,10 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection } from '../lib/firebase';
+import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForPhone } from '../lib/firebase';
 import { sendPhoneOtp, verifyPhoneOtp } from '../lib/otp';
+import { initPushNotifications, showLocalNotification } from '../lib/pushNotifications';
+import { getOrderStatusNotification } from '../lib/notificationMessages';
 import { Category, Product, CartItem } from '../lib/types';
 import { DELIVERY_COST } from '../lib/theme';
+
+export interface AppNotification {
+  id: string;
+  phone: string;
+  orderId?: string;
+  title: string;
+  body: string;
+  status?: string;
+  createdAt?: string;
+  read?: boolean;
+}
+
+const READ_NOTIFICATION_IDS_KEY = 'read_notification_ids';
+const LAST_NOTIFICATION_PUSH_KEY = 'last_notification_push_at';
 
 interface ToastMessage {
   id: number;
@@ -46,6 +62,13 @@ interface AppContextType {
   // Orders
   submitOrder: (name: string, phone: string, address: string) => Promise<boolean>;
 
+  // Notifications
+  notifications: AppNotification[];
+  unreadNotificationCount: number;
+  notificationsLoading: boolean;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: () => Promise<void>;
+
   // Toast
   toasts: ToastMessage[];
   showToast: (message: string) => void;
@@ -65,6 +88,8 @@ export function AppProvider({ children }: { children: any }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const toastIdRef = useRef(0);
   const loggingOutRef = useRef(false);
@@ -75,6 +100,9 @@ export function AppProvider({ children }: { children: any }) {
   const lastCatalogRefreshRef = useRef(0);
   const fetchAllDataRef = useRef<(f?: boolean) => void>(() => {});
   const CATALOG_REFRESH_THROTTLE_MS = 15000;
+  const NOTIFICATION_POLL_MS = 25000;
+
+  const unreadNotificationCount = notifications.filter((n) => !n.read).length;
 
   // Check auth on mount
   useEffect(() => {
@@ -363,6 +391,97 @@ export function AppProvider({ children }: { children: any }) {
     return favorites.includes(productId);
   }, [favorites]);
 
+  const loadReadNotificationIds = useCallback(async (): Promise<Set<string>> => {
+    try {
+      const raw = await AsyncStorage.getItem(READ_NOTIFICATION_IDS_KEY);
+      if (!raw) return new Set();
+      const ids = JSON.parse(raw);
+      return new Set(Array.isArray(ids) ? ids : []);
+    } catch {
+      return new Set();
+    }
+  }, []);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!userPhone) {
+      setNotifications([]);
+      return;
+    }
+    setNotificationsLoading(true);
+    try {
+      const [items, readIds] = await Promise.all([
+        fetchNotificationsForPhone(userPhone),
+        loadReadNotificationIds(),
+      ]);
+
+      const mapped: AppNotification[] = items.map((n: any) => ({
+        id: n.id,
+        phone: n.phone,
+        orderId: n.orderId,
+        title: n.title || 'إشعار',
+        body: n.body || '',
+        status: n.status,
+        createdAt: n.createdAt,
+        read: readIds.has(n.id),
+      }));
+      setNotifications(mapped);
+
+      const lastPushRaw = await AsyncStorage.getItem(LAST_NOTIFICATION_PUSH_KEY);
+      if (!lastPushRaw) {
+        await AsyncStorage.setItem(LAST_NOTIFICATION_PUSH_KEY, String(Date.now()));
+        return;
+      }
+
+      let lastPush = Number(lastPushRaw) || 0;
+      for (const n of mapped) {
+        const t = new Date(n.createdAt || 0).getTime();
+        if (Number.isFinite(t) && t > lastPush) {
+          await showLocalNotification(n.title, n.body, {
+            orderId: n.orderId || '',
+            status: n.status || '',
+          });
+          lastPush = Math.max(lastPush, t);
+        }
+      }
+      await AsyncStorage.setItem(LAST_NOTIFICATION_PUSH_KEY, String(lastPush));
+    } catch {
+      // ignore
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [userPhone, loadReadNotificationIds]);
+
+  const markNotificationsRead = useCallback(async () => {
+    if (!notifications.length) return;
+    const allIds = notifications.map((n) => n.id);
+    try {
+      await AsyncStorage.setItem(READ_NOTIFICATION_IDS_KEY, JSON.stringify(allIds));
+    } catch {
+      // ignore
+    }
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, [notifications]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !userPhone) {
+      setNotifications([]);
+      return;
+    }
+    initPushNotifications().catch(() => {});
+    refreshNotifications();
+    const timer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [isLoggedIn, userPhone, refreshNotifications]);
+
+  useEffect(() => {
+    if (isLoggedIn && userPhone) {
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') refreshNotifications();
+      });
+      return () => sub.remove();
+    }
+  }, [isLoggedIn, userPhone, refreshNotifications]);
+
   const submitOrder = useCallback(async (name: string, phone: string, address: string): Promise<boolean> => {
     const totals = getCartTotals();
     const orderData = {
@@ -384,10 +503,18 @@ export function AppProvider({ children }: { children: any }) {
     };
     const success = await addDocument('orders', orderData);
     if (success) {
+      const msg = getOrderStatusNotification('pending');
+      await addDocument('notifications', {
+        phone,
+        title: msg.title,
+        body: msg.body,
+        status: 'pending',
+      });
       clearCart();
+      refreshNotifications();
     }
     return success;
-  }, [cart, getCartTotals, clearCart]);
+  }, [cart, getCartTotals, clearCart, refreshNotifications]);
 
   return (
     <AppContext.Provider
@@ -397,6 +524,8 @@ export function AppProvider({ children }: { children: any }) {
         cart, addToCart, removeFromCart, updateCartItemQty, clearCart, getCartCount, getCartTotals,
         favorites, toggleFavorite, isFavorite,
         submitOrder,
+        notifications, unreadNotificationCount, notificationsLoading,
+        refreshNotifications, markNotificationsRead,
         toasts, showToast,
       }}
     >

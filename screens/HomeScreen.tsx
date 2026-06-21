@@ -54,6 +54,7 @@ export default function HomeScreen() {
     refreshData,
     getCartCount,
     userPhone,
+    unreadNotificationCount,
   } = useApp();
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -150,6 +151,19 @@ export default function HomeScreen() {
        
           </View>
           <View style={styles.heroActions}>
+            <TouchableOpacity
+              style={styles.heroBtn}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={20} color={Colors.white} />
+              {unreadNotificationCount > 0 ? (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.heroBtn}
               onPress={() => Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}`)}

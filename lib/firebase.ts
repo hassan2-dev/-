@@ -154,6 +154,22 @@ export async function fetchCollection(collectionName: string): Promise<any[]> {
   }
 }
 
+export async function fetchNotificationsForPhone(phone: string): Promise<any[]> {
+  if (!phone?.trim()) return [];
+  const normalized = phone.trim();
+  try {
+    const all = await fetchCollection('notifications');
+    return all
+      .filter((n) => String(n.phone || '').trim() === normalized)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+  } catch {
+    return [];
+  }
+}
+
 export async function setDocument(collectionName: string, docId: string, data: any): Promise<boolean> {
   try {
     const token = await getAuthToken();

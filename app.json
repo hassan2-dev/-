@@ -28,7 +28,14 @@
     },
     "description": "Quickly generate React Native components with AI",
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#3D9B4F"
+        }
+      ]
     ]
   }
 }
