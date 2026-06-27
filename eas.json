@@ -14,8 +14,7 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false,
-        "appleTeamId": "P486YA4QZB"
+        "simulator": false
       },
       "android": {
         "buildType": "apk"
@@ -24,8 +23,7 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium",
-        "appleTeamId": "P486YA4QZB"
+        "resourceClass": "m-medium"
       },
       "android": {
         "buildType": "app-bundle"
