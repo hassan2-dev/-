@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "662162908373",
+    "project_id": "basjfk-58536",
+    "storage_bucket": "basjfk-58536.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:662162908373:android:994e32c8f41302644e2e5c",
+        "android_client_info": {
+          "package_name": "com.tofahastore.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHhaOWW7XesbnZBPgD-reUGYa7Ql7soCw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "662162908373-ceubra5lenh41osqic0odbt12tm4nksn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tofahastore.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

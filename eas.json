@@ -14,7 +14,8 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "appleTeamId": "P486YA4QZB"
       },
       "android": {
         "buildType": "apk"
@@ -23,7 +24,8 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "appleTeamId": "P486YA4QZB"
       },
       "android": {
         "buildType": "app-bundle"
@@ -31,6 +33,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "P486YA4QZB",
+        "ascAppId": "6763769377"
+      }
+    }
   }
 }

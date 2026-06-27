@@ -36,6 +36,12 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Firebase (service account keys — never commit)
+*-firebase-adminsdk-*.json
+google-services (*).json
+GoogleService-Info (*).plist
+
 # generated native folders
 /ios
 /android
+

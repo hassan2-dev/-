@@ -26,6 +26,97 @@ const app = initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = getFirestore(app);
 let allProducts = [];
 
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+
+async function sendExpoPushBatch(messages) {
+    if (!messages.length) return { sent: 0, errors: 0 };
+    const response = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+    });
+    const data = await response.json();
+    const tickets = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [data];
+    const errors = tickets.filter((ticket) => ticket?.status === 'error').length;
+    return { sent: messages.length - errors, errors };
+}
+
+async function fetchAllPushTokens() {
+    const snap = await getDocs(collection(db, 'push_tokens'));
+    const tokens = [];
+    snap.forEach((docSnap) => {
+        const token = docSnap.data()?.token;
+        if (token) tokens.push(token);
+    });
+    return [...new Set(tokens)];
+}
+
+async function fetchPushTokensForUser(email, phone) {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    const normalizedPhone = (phone || '').trim();
+    if (!normalizedEmail && !normalizedPhone) return [];
+
+    const snap = await getDocs(collection(db, 'push_tokens'));
+    const tokens = [];
+    snap.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const token = data.token;
+        const tokenEmail = String(data.email || '').trim().toLowerCase();
+        const tokenPhone = String(data.phone || '').trim();
+        const matches =
+            (normalizedEmail && tokenEmail === normalizedEmail) ||
+            (normalizedPhone && tokenPhone === normalizedPhone);
+        if (token && matches) tokens.push(token);
+    });
+    return [...new Set(tokens)];
+}
+
+async function deliverExpoPush({ title, body, tokens, data = {} }) {
+    const uniqueTokens = [...new Set((tokens || []).filter(Boolean))];
+    if (!uniqueTokens.length) return { sent: 0, errors: 0 };
+
+    const messages = uniqueTokens.map((to) => ({
+        to,
+        title,
+        body,
+        data,
+        sound: 'default',
+        channelId: 'orders',
+    }));
+
+    let sent = 0;
+    let errors = 0;
+    for (let i = 0; i < messages.length; i += 100) {
+        const chunk = messages.slice(i, i + 100);
+        const result = await sendExpoPushBatch(chunk);
+        sent += result.sent;
+        errors += result.errors;
+    }
+    return { sent, errors };
+}
+
+async function pushToUser({ email, phone, title, body, data }) {
+    const tokens = await fetchPushTokensForUser(email, phone);
+    return deliverExpoPush({ title, body, tokens, data });
+}
+
+async function pushToAllUsers({ title, body, data }) {
+    const tokens = await fetchAllPushTokens();
+    return deliverExpoPush({ title, body, tokens, data });
+}
+
+async function createInAppNotification(payload) {
+    await addDoc(collection(db, 'notifications'), {
+        ...payload,
+        read: false,
+        createdAt: serverTimestamp(),
+    });
+}
+
 // ✅ تحديث meta/version باستخدام serverTimestamp لمطابقة الفلاتر في التطبيق
 async function bumpDataVersion() {
     try {
@@ -226,6 +317,7 @@ window.switchTab = (tabId) => {
     if(tabId === 'orders') loadOrders('pending');
     if(tabId === 'accepted-orders') loadOrders('accepted');
     if(tabId === 'sales') loadSales();
+    if(tabId === 'notifications') loadPushTokenStats();
 };
 
 // === الأقسام ===
@@ -598,16 +690,29 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
     };
     const msg = NOTIF_MSG[nextStatus];
     if (msg && (orderData.phone || orderData.email)) {
-        await addDoc(collection(db, "notifications"), {
+        await createInAppNotification({
             phone: orderData.phone || '',
             email: orderData.email || '',
             orderId: id,
             title: msg.title,
             body: msg.body,
             status: nextStatus,
-            read: false,
-            createdAt: serverTimestamp()
         });
+
+        try {
+            const pushResult = await pushToUser({
+                email: orderData.email,
+                phone: orderData.phone,
+                title: msg.title,
+                body: msg.body,
+                data: { orderId: id, status: nextStatus },
+            });
+            if (pushResult.sent === 0 && pushResult.errors === 0) {
+                console.warn('No push tokens found for this customer');
+            }
+        } catch (e) {
+            console.error('pushToUser failed', e);
+        }
     }
 
     window.showCustomAlert(`تم تغيير الحالة إلى: ${getOrderStatusLabel(nextStatus)}`);
@@ -653,4 +758,83 @@ window.deleteDocItem = async (col, id, unused, cb) => {
     await deleteDoc(doc(db, col, id));
     await bumpDataVersion();
     if(cb) cb();
+};
+
+window.loadPushTokenStats = async () => {
+    const statsEl = document.getElementById('push-token-stats');
+    if (!statsEl) return;
+    statsEl.innerHTML = loadingState();
+
+    try {
+        const snap = await getDocs(collection(db, 'push_tokens'));
+        const counts = { ios: 0, android: 0, web: 0, total: 0 };
+        snap.forEach((docSnap) => {
+            const platform = docSnap.data()?.platform || 'unknown';
+            counts.total += 1;
+            if (platform === 'ios') counts.ios += 1;
+            else if (platform === 'android') counts.android += 1;
+            else if (platform === 'web') counts.web += 1;
+        });
+
+        statsEl.innerHTML = `
+            <div class="sales-card card-3d" style="margin-bottom:1rem">
+                <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة مسجّلة للإشعارات</h3>
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;margin-top:1rem">
+                    <div><strong>${counts.total}</strong><div class="order-meta">الإجمالي</div></div>
+                    <div><strong>${counts.android}</strong><div class="order-meta">أندرويد</div></div>
+                    <div><strong>${counts.ios}</strong><div class="order-meta">آيفون</div></div>
+                    <div><strong>${counts.web}</strong><div class="order-meta">ويب</div></div>
+                </div>
+            </div>`;
+    } catch (e) {
+        statsEl.innerHTML = `<div class="order-meta">تعذر تحميل إحصائيات الأجهزة</div>`;
+    }
+};
+
+window.sendBroadcastNotification = async () => {
+    const title = document.getElementById('broadcast-title')?.value?.trim();
+    const body = document.getElementById('broadcast-body')?.value?.trim();
+    if (!title || !body) {
+        showCustomAlert('أدخل عنوان ونص الإشعار');
+        return;
+    }
+
+    const btn = document.getElementById('btn-send-broadcast');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
+    }
+
+    try {
+        await createInAppNotification({
+            phone: '',
+            email: '',
+            title,
+            body,
+            broadcast: true,
+        });
+
+        const pushResult = await pushToAllUsers({
+            title,
+            body,
+            data: { broadcast: 'true' },
+        });
+
+        showCustomAlert(
+            pushResult.sent > 0
+                ? `تم إرسال الإشعار إلى ${pushResult.sent} جهاز`
+                : 'تم حفظ الإشعار — لا توجد أجهزة مسجّلة بعد'
+        );
+
+        document.getElementById('broadcast-title').value = '';
+        document.getElementById('broadcast-body').value = '';
+        loadPushTokenStats();
+    } catch (e) {
+        showCustomAlert(e.message || 'تعذر إرسال الإشعار');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال للجميع';
+        }
+    }
 };

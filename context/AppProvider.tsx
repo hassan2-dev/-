@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken } from '../lib/firebase';
+import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken } from '../lib/firebase';
 import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
-import { initPushNotifications, showLocalNotification } from '../lib/pushNotifications';
+import { initPushNotifications, showLocalNotification, registerExpoPushToken, getPushPlatform, addNotificationListeners } from '../lib/pushNotifications';
 import { getOrderStatusNotification } from '../lib/notificationMessages';
 import { Category, Product, CartItem } from '../lib/types';
 import { DELIVERY_COST } from '../lib/theme';
@@ -22,6 +22,7 @@ export interface AppNotification {
 
 const READ_NOTIFICATION_IDS_KEY = 'read_notification_ids';
 const LAST_NOTIFICATION_PUSH_KEY = 'last_notification_push_at';
+const EXPO_PUSH_TOKEN_KEY = 'expo_push_token';
 
 interface ToastMessage {
   id: number;
@@ -384,6 +385,15 @@ export function AppProvider({ children }: { children: any }) {
   const logout = useCallback(async () => {
     loggingOutRef.current = true;
 
+    try {
+      const storedToken = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
+      if (storedToken) {
+        await removePushToken(storedToken);
+      }
+    } catch {
+      // ignore
+    }
+
     setIsLoggedIn(false);
     setIsGuest(false);
     setUserEmail(null);
@@ -398,10 +408,26 @@ export function AppProvider({ children }: { children: any }) {
       'auth_display_name',
       'auth_photo_url',
       'firebase_refresh_token',
+      EXPO_PUSH_TOKEN_KEY,
     ]);
 
     setTimeout(() => { loggingOutRef.current = false; }, 500);
   }, []);
+
+  const syncPushToken = useCallback(async () => {
+    if (!isLoggedIn || isGuest || (!userEmail && !userPhone)) return;
+
+    const token = await registerExpoPushToken();
+    if (!token) return;
+
+    await savePushToken({
+      token,
+      email: userEmail,
+      phone: userPhone,
+      platform: getPushPlatform(),
+    });
+    await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+  }, [isLoggedIn, isGuest, userEmail, userPhone]);
 
   const addToCart = useCallback((product: Product) => {
     setCart(prev => {
@@ -556,10 +582,20 @@ export function AppProvider({ children }: { children: any }) {
       return;
     }
     initPushNotifications().catch(() => {});
+    syncPushToken().catch(() => {});
     refreshNotifications();
     const timer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
     return () => clearInterval(timer);
-  }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications]);
+  }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications, syncPushToken]);
+
+  useEffect(() => {
+    if (!isLoggedIn || isGuest) return;
+    return addNotificationListeners({
+      onReceived: () => {
+        refreshNotifications().catch(() => {});
+      },
+    });
+  }, [isLoggedIn, isGuest, refreshNotifications]);
 
   useEffect(() => {
     if (isLoggedIn && !isGuest && (userEmail || userPhone)) {

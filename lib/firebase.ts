@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 
 const API_KEY = 'AIzaSyAPiiVfmJdGHje0gittK-7yFTYNTQNY6Fk';
 const PROJECT_ID = 'basjfk-58536';
@@ -165,6 +166,7 @@ export async function fetchNotificationsForUser(
     const all = await fetchCollection('notifications');
     return all
       .filter((n) => {
+        if (n.broadcast === true) return true;
         const nEmail = String(n.email || '').trim().toLowerCase();
         const nPhone = String(n.phone || '').trim();
         return (
@@ -184,6 +186,31 @@ export async function fetchNotificationsForUser(
 /** @deprecated use fetchNotificationsForUser */
 export async function fetchNotificationsForPhone(phone: string): Promise<any[]> {
   return fetchNotificationsForUser(null, phone);
+}
+
+export async function hashPushToken(token: string): Promise<string> {
+  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, token);
+}
+
+export async function savePushToken(params: {
+  token: string;
+  email: string | null;
+  phone: string | null;
+  platform: string;
+}): Promise<boolean> {
+  const docId = await hashPushToken(params.token);
+  return setDocument('push_tokens', docId, {
+    token: params.token,
+    email: params.email?.trim().toLowerCase() || '',
+    phone: params.phone?.trim() || '',
+    platform: params.platform,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function removePushToken(token: string): Promise<void> {
+  const docId = await hashPushToken(token);
+  await deleteDocument('push_tokens', docId);
 }
 
 export async function setDocument(collectionName: string, docId: string, data: any): Promise<boolean> {

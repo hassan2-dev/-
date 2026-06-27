@@ -17,14 +17,29 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tofahastore.app",
+      "appleTeamId": "P486YA4QZB",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleDisplayName": "متجر تفاحة",
-        "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغك بتحديثات حالة طلباتك.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغك بتحديثات حالة طلباتك والعروض الجديدة.",
+        "UIBackgroundModes": ["remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["tofahastore"]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.662162908373-ceubra5lenh41osqic0odbt12tm4nksn"
+            ]
+          }
+        ]
       }
     },
     "android": {
       "package": "com.tofahastore.app",
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["POST_NOTIFICATIONS"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -51,7 +66,8 @@
       "eas": {
         "projectId": "1767f9db-925b-4a14-b0b2-1c8e68ab658f"
       },
-      "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com"
+      "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
+      "googleIosClientId": "662162908373-ceubra5lenh41osqic0odbt12tm4nksn.apps.googleusercontent.com"
     }
   }
 }

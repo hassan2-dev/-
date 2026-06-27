@@ -69,6 +69,9 @@
           <button class="nav-item" onclick="switchTab('banners')">
             <i class="fa-solid fa-image"></i> البنرات
           </button>
+          <button class="nav-item" onclick="switchTab('notifications')">
+            <i class="fa-solid fa-bell"></i> الإشعارات
+          </button>
         </nav>
       </aside>
 
@@ -286,6 +289,31 @@
               </button>
             </div>
           </div>
+
+          <!-- الإشعارات -->
+          <div id="notifications" class="tab-content">
+            <div id="push-token-stats"></div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-bullhorn"></i>
+                <h2>إرسال إشعار للجميع</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                يصل للأندرويد والآيفون والويب (Expo Push). يحتاج المستخدم تسجيل الدخول وفتح التطبيق مرة واحدة لتسجيل الجهاز.
+              </p>
+              <div class="form-field">
+                <label for="broadcast-title">عنوان الإشعار</label>
+                <input type="text" id="broadcast-title" placeholder="مثال: عرض خاص اليوم 🎉" />
+              </div>
+              <div class="form-field">
+                <label for="broadcast-body">نص الإشعار</label>
+                <textarea id="broadcast-body" rows="3" placeholder="اكتب رسالة الإشعار هنا..." style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid #e5e7eb;font-family:inherit"></textarea>
+              </div>
+              <button id="btn-send-broadcast" class="btn-primary" onclick="sendBroadcastNotification()">
+                <i class="fa-solid fa-paper-plane"></i> إرسال للجميع
+              </button>
+            </div>
+          </div>
         </main>
       </div>
     </div>
@@ -301,6 +329,7 @@
       offers: { title: 'العروض', sub: 'صور العروض الترويجية' },
       banners: { title: 'البنرات', sub: 'بانرات الصفحة الرئيسية' },
       sales: { title: 'المبيعات', sub: 'إجمالي الإيرادات' },
+      notifications: { title: 'الإشعارات', sub: 'إرسال Push للجميع' },
     };
 
     window.setAdminPageTitle = (tabId) => {
