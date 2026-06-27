@@ -427,6 +427,9 @@ export function AppProvider({ children }: { children: any }) {
       platform: getPushPlatform(),
     });
     await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+    if (__DEV__) {
+      console.log('[Push] token registered', { platform: getPushPlatform(), token: token.slice(0, 28) + '...' });
+    }
   }, [isLoggedIn, isGuest, userEmail, userPhone]);
 
   const addToCart = useCallback((product: Product) => {
