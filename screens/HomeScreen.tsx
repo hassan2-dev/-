@@ -30,6 +30,7 @@ import BannerSlider from '../components/BannerSlider';
 import OfferSlots from '../components/OfferSlots';
 import CategoryCard from '../components/CategoryCard';
 import PaginatedProductGrid from '../components/PaginatedProductGrid';
+import { resolveUserDisplayName } from '../lib/authConfig';
 import { SectionHeader } from '../components/layout';
 
 const PROFILE_KEYS = ['customer_profile_v1', 'user_profile'];
@@ -54,6 +55,8 @@ export default function HomeScreen() {
     refreshData,
     getCartCount,
     userPhone,
+    userEmail,
+    userDisplayName,
     unreadNotificationCount,
   } = useApp();
   const [search, setSearch] = useState('');
@@ -137,6 +140,7 @@ export default function HomeScreen() {
 
   const cartCount = getCartCount();
   const visibleOrders = orders.filter((o: any) => !hiddenOrderIds.includes(o.id));
+  const displayName = resolveUserDisplayName(userDisplayName, userEmail) ?? 'زبون';
 
   return (
     <GlassBackground>
@@ -147,8 +151,7 @@ export default function HomeScreen() {
         <View style={styles.heroTop}>
           <View>
             <Text style={styles.greeting}>مرحباً بك 👋</Text>
-            <Text style={styles.brand}>{userName ?? 'اسم زبون'}</Text>
-       
+            <Text style={styles.brand}>{displayName}</Text>
           </View>
           <View style={styles.heroActions}>
             <TouchableOpacity
@@ -183,7 +186,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        {userPhone ? (
+        {userEmail ? (
+          <Text style={styles.phoneLine}>{userEmail}</Text>
+        ) : userPhone ? (
           <Text style={styles.phoneLine}>{userPhone}</Text>
         ) : null}
       </LinearGradient>

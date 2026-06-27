@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, I18nManager, View, Text } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppProvider, useApp } from './context/AppProvider';
 import { Colors, FontSize, Layout } from './lib/theme';
 import Toast from './components/Toast';
+import RedAppleLogo from './components/RedAppleLogo';
 
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -115,13 +117,12 @@ function AppNavigator() {
   if (isCheckingAuth) {
     return (
       <LinearGradient
-        colors={[Colors.primaryLight, Colors.background, Colors.white]}
+        colors={['#FFFEFE', '#FFF5F5', '#FFFFFF']}
         style={styles.splash}
       >
-        <View style={styles.splashLogo}>
-          <Ionicons name="nutrition" size={48} color={Colors.white} />
-        </View>
-        <Text style={styles.splashText}>تفاحة</Text>
+        <View style={[styles.splashBlob, styles.splashBlobTop]} />
+        <RedAppleLogo size={96} />
+        <Text style={styles.splashText}>متجر تفاحة</Text>
         <Text style={styles.splashSub}>تسوق طازج بكل سهولة</Text>
       </LinearGradient>
     );
@@ -152,14 +153,16 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <SafeAreaProvider style={styles.container}>
-      <AppProvider>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-        <Toast />
-      </AppProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaProvider style={styles.container}>
+        <AppProvider>
+          <NavigationContainer>
+            <AppNavigator />
+          </NavigationContainer>
+          <Toast />
+        </AppProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -202,15 +205,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    overflow: 'hidden',
   },
-  splashLogo: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+  splashBlob: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(229, 57, 53, 0.08)',
+  },
+  splashBlobTop: {
+    width: 260,
+    height: 260,
+    top: -70,
+    right: -60,
   },
   splashText: {
     fontSize: FontSize.title,

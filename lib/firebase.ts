@@ -154,13 +154,24 @@ export async function fetchCollection(collectionName: string): Promise<any[]> {
   }
 }
 
-export async function fetchNotificationsForPhone(phone: string): Promise<any[]> {
-  if (!phone?.trim()) return [];
-  const normalized = phone.trim();
+export async function fetchNotificationsForUser(
+  email: string | null,
+  phone: string | null
+): Promise<any[]> {
+  const normalizedEmail = email?.trim().toLowerCase() || '';
+  const normalizedPhone = phone?.trim() || '';
+  if (!normalizedEmail && !normalizedPhone) return [];
   try {
     const all = await fetchCollection('notifications');
     return all
-      .filter((n) => String(n.phone || '').trim() === normalized)
+      .filter((n) => {
+        const nEmail = String(n.email || '').trim().toLowerCase();
+        const nPhone = String(n.phone || '').trim();
+        return (
+          (normalizedEmail && nEmail === normalizedEmail) ||
+          (normalizedPhone && nPhone === normalizedPhone)
+        );
+      })
       .sort(
         (a, b) =>
           new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
@@ -168,6 +179,11 @@ export async function fetchNotificationsForPhone(phone: string): Promise<any[]> 
   } catch {
     return [];
   }
+}
+
+/** @deprecated use fetchNotificationsForUser */
+export async function fetchNotificationsForPhone(phone: string): Promise<any[]> {
+  return fetchNotificationsForUser(null, phone);
 }
 
 export async function setDocument(collectionName: string, docId: string, data: any): Promise<boolean> {
@@ -260,7 +276,83 @@ export async function addDocument(collectionName: string, data: any): Promise<bo
   }
 }
 
-export async function signInWithGoogleToken(googleIdToken: string): Promise<boolean> {
+export async function signInWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(`${AUTH_BASE}/accounts:signInWithPassword?key=${API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, message: translateFirebaseAuthError(data.error?.message) };
+    }
+    cachedToken = data.idToken;
+    tokenExpiry = Date.now() + 3500 * 1000;
+    if (data.refreshToken) {
+      await AsyncStorage.setItem('firebase_refresh_token', data.refreshToken);
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'تعذر تسجيل الدخول' };
+  }
+}
+
+export async function signUpWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(`${AUTH_BASE}/accounts:signUp?key=${API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, message: translateFirebaseAuthError(data.error?.message) };
+    }
+    cachedToken = data.idToken;
+    tokenExpiry = Date.now() + 3500 * 1000;
+    if (data.refreshToken) {
+      await AsyncStorage.setItem('firebase_refresh_token', data.refreshToken);
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'تعذر إنشاء الحساب' };
+  }
+}
+
+function translateFirebaseAuthError(code?: string): string {
+  switch (code) {
+    case 'EMAIL_NOT_FOUND':
+      return 'البريد غير مسجّل';
+    case 'INVALID_PASSWORD':
+    case 'INVALID_LOGIN_CREDENTIALS':
+      return 'كلمة المرور غير صحيحة';
+    case 'EMAIL_EXISTS':
+      return 'هذا البريد مستخدم مسبقاً';
+    case 'WEAK_PASSWORD : Password should be at least 6 characters':
+    case 'WEAK_PASSWORD':
+      return 'كلمة المرور قصيرة (6 أحرف على الأقل)';
+    case 'INVALID_EMAIL':
+      return 'صيغة البريد غير صحيحة';
+    case 'OPERATION_NOT_ALLOWED':
+      return 'فعّل Google من Firebase → Authentication';
+    case 'INVALID_IDP_RESPONSE':
+    case 'INVALID_CREDENTIAL':
+      return 'تعذر التحقق من حساب Google';
+    default:
+      return 'تعذر إتمام العملية';
+  }
+}
+
+export async function signInWithGoogleToken(
+  googleIdToken: string
+): Promise<{ ok: boolean; email?: string; message?: string; code?: string }> {
   try {
     const res = await fetch(
       `${AUTH_BASE}/accounts:signInWithIdp?key=${API_KEY}`,
@@ -268,8 +360,8 @@ export async function signInWithGoogleToken(googleIdToken: string): Promise<bool
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postBody: `id_token=${googleIdToken}&providerId=google.com`,
-          requestUri: 'http://localhost',
+          postBody: `id_token=${encodeURIComponent(googleIdToken)}&providerId=google.com`,
+          requestUri: 'https://basjfk-58536.firebaseapp.com/__/auth/handler',
           returnSecureToken: true,
           returnIdpCredential: true,
         }),
@@ -282,13 +374,22 @@ export async function signInWithGoogleToken(googleIdToken: string): Promise<bool
       if (data.refreshToken) {
         await AsyncStorage.setItem('firebase_refresh_token', data.refreshToken);
       }
-      return true;
+      return { ok: true, email: data.email };
     }
     console.error('Firebase signInWithIdp failed:', JSON.stringify(data));
-    return false;
+    const firebaseCode = data.error?.message as string | undefined;
+    return {
+      ok: false,
+      message: translateFirebaseAuthError(firebaseCode),
+      code: firebaseCode,
+    };
   } catch (error) {
     console.error('Firebase Google sign-in error:', error);
-    return false;
+    return {
+      ok: false,
+      message: 'تعذر تسجيل الدخول عبر Google',
+      code: error instanceof Error ? error.message : 'network_error',
+    };
   }
 }
 

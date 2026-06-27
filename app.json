@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "تفاحة",
-    "slug": "tufaha-store",
+    "name": "متجر تفاحة",
+    "slug": "snack-d35c0e59-b6e6-40e5-a871-d90fed8166c6",
     "owner": "hassune21",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "tofahastore",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -15,15 +16,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hassune21.tufaha",
+      "bundleIdentifier": "com.tofahastore.app",
       "infoPlist": {
-        "CFBundleDisplayName": "تفاحة",
+        "CFBundleDisplayName": "متجر تفاحة",
         "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغك بتحديثات حالة طلباتك.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.hassune21.tufaha",
+      "package": "com.tofahastore.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -43,12 +44,14 @@
           "icon": "./assets/icon.png",
           "color": "#3D9B4F"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
         "projectId": "1767f9db-925b-4a14-b0b2-1c8e68ab658f"
-      }
+      },
+      "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com"
     }
   }
 }

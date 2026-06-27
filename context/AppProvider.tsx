@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForPhone } from '../lib/firebase';
-import { sendPhoneOtp, verifyPhoneOtp } from '../lib/otp';
+import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken } from '../lib/firebase';
+import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
 import { initPushNotifications, showLocalNotification } from '../lib/pushNotifications';
 import { getOrderStatusNotification } from '../lib/notificationMessages';
 import { Category, Product, CartItem } from '../lib/types';
@@ -10,7 +10,8 @@ import { DELIVERY_COST } from '../lib/theme';
 
 export interface AppNotification {
   id: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   orderId?: string;
   title: string;
   body: string;
@@ -31,9 +32,16 @@ interface AppContextType {
   // Auth
   isLoggedIn: boolean;
   isCheckingAuth: boolean;
+  isGuest: boolean;
+  userEmail: string | null;
   userPhone: string | null;
-  requestOtp: (phone: string) => Promise<{ ok: boolean; devCode?: string; message?: string }>;
-  verifyOtpAndLogin: (phone: string, code: string) => Promise<boolean>;
+  userDisplayName: string | null;
+  userPhotoUrl: string | null;
+  loginWithEmail: (email: string, password: string) => Promise<boolean>;
+  registerWithEmail: (email: string, password: string) => Promise<boolean>;
+  loginAsGuest: () => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  finalizeGoogleSignIn: (idToken: string) => Promise<boolean>;
   logout: () => void;
 
   // Data
@@ -80,7 +88,11 @@ export const useApp = () => useContext(AppContext);
 export function AppProvider({ children }: { children: any }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userPhone, setUserPhone] = useState<string | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [banners, setBanners] = useState<string[]>([]);
@@ -149,12 +161,20 @@ export function AppProvider({ children }: { children: any }) {
 
   async function checkAuth() {
     try {
-      const [loggedIn, phone] = await Promise.all([
+      const [loggedIn, guest, email, phone, displayName, photoUrl] = await Promise.all([
         AsyncStorage.getItem('is_logged_in'),
+        AsyncStorage.getItem('is_guest'),
+        AsyncStorage.getItem('auth_email'),
         AsyncStorage.getItem('auth_phone'),
+        AsyncStorage.getItem('auth_display_name'),
+        AsyncStorage.getItem('auth_photo_url'),
       ]);
-      setIsLoggedIn(loggedIn === 'true' && !!phone);
+      setIsGuest(guest === 'true');
+      setUserEmail(email);
       setUserPhone(phone);
+      setUserDisplayName(displayName);
+      setUserPhotoUrl(photoUrl);
+      setIsLoggedIn(loggedIn === 'true' && (!!email || guest === 'true'));
     } catch (e) {}
     setIsCheckingAuth(false);
   }
@@ -261,43 +281,103 @@ export function AppProvider({ children }: { children: any }) {
     showToast('تم تحديث البيانات من السيرفر');
   }, [showToast]);
 
-  const requestOtp = useCallback(async (phone: string) => {
-    const result = await sendPhoneOtp(phone);
-    if (!result.ok) {
-      return { ok: false, message: result.message };
-    }
-    return { ok: true, devCode: result.code };
+  const completeEmailLogin = useCallback(async (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    await AsyncStorage.multiSet([
+      ['is_logged_in', 'true'],
+      ['is_guest', 'false'],
+      ['auth_email', normalized],
+    ]);
+    await AsyncStorage.multiRemove(['auth_display_name', 'auth_photo_url']);
+    setIsGuest(false);
+    setUserEmail(normalized);
+    setUserDisplayName(null);
+    setUserPhotoUrl(null);
+    setIsLoggedIn(true);
   }, []);
 
-  const verifyOtpAndLogin = useCallback(async (phone: string, code: string) => {
-    const result = await verifyPhoneOtp(phone, code);
-    if (!result.ok || !result.phone) {
-      showToast(result.message || 'رمز التحقق غير صحيح');
+  const loginWithEmail = useCallback(async (email: string, password: string) => {
+    const result = await signInWithEmailPassword(email.trim().toLowerCase(), password);
+    if (!result.ok) {
+      showToast(result.message || 'تعذر تسجيل الدخول');
+      return false;
+    }
+    await completeEmailLogin(email);
+    showToast('تم تسجيل الدخول بنجاح');
+    return true;
+  }, [completeEmailLogin, showToast]);
+
+  const registerWithEmail = useCallback(async (email: string, password: string) => {
+    const result = await signUpWithEmailPassword(email.trim().toLowerCase(), password);
+    if (!result.ok) {
+      showToast(result.message || 'تعذر إنشاء الحساب');
+      return false;
+    }
+    await completeEmailLogin(email);
+    showToast('تم إنشاء الحساب بنجاح');
+    return true;
+  }, [completeEmailLogin, showToast]);
+
+  const loginAsGuest = useCallback(async () => {
+    await AsyncStorage.multiSet([
+      ['is_logged_in', 'true'],
+      ['is_guest', 'true'],
+    ]);
+    await AsyncStorage.multiRemove(['auth_display_name', 'auth_photo_url']);
+    setIsGuest(true);
+    setUserEmail(null);
+    setUserDisplayName(null);
+    setUserPhotoUrl(null);
+    setIsLoggedIn(true);
+    showToast('مرحباً بك كزائر');
+  }, [showToast]);
+
+  const loginWithGoogle = useCallback(async () => {
+    showToast('استخدم زر Google من شاشة تسجيل الدخول');
+  }, [showToast]);
+
+  const finalizeGoogleSignIn = useCallback(async (idToken: string) => {
+    const result = await signInWithGoogleToken(idToken);
+    if (!result.ok) {
+      console.error('[Firebase Google]', result.code, result.message);
+      const message =
+        __DEV__ && result.code
+          ? `${result.message} (${result.code})`
+          : result.message || 'تعذر تسجيل الدخول عبر Google';
+      showToast(message);
       return false;
     }
 
-    await AsyncStorage.multiSet([
-      ['is_logged_in', 'true'],
-      ['auth_phone', result.phone],
-    ]);
+    const googleProfile = parseGoogleProfileFromIdToken(idToken);
+    const email = result.email || googleProfile.email;
+    const displayName = resolveUserDisplayName(googleProfile.name, email);
+    const photoUrl = googleProfile.picture;
 
-    try {
-      const profileKey = 'customer_profile_v1';
-      const legacyKey = 'user_profile';
-      const saved = (await AsyncStorage.getItem(profileKey)) || (await AsyncStorage.getItem(legacyKey));
-      const profile = saved ? JSON.parse(saved) : {};
-      const updated = { ...profile, phone: result.phone };
+    if (email) {
+      const storageEntries: [string, string][] = [
+        ['is_logged_in', 'true'],
+        ['is_guest', 'false'],
+        ['auth_email', email],
+      ];
+      if (displayName) storageEntries.push(['auth_display_name', displayName]);
+      if (photoUrl) storageEntries.push(['auth_photo_url', photoUrl]);
+      await AsyncStorage.multiSet(storageEntries);
+      setIsGuest(false);
+      setUserEmail(email);
+      setUserDisplayName(displayName);
+      setUserPhotoUrl(photoUrl);
+      setIsLoggedIn(true);
+    } else {
       await AsyncStorage.multiSet([
-        [profileKey, JSON.stringify(updated)],
-        [legacyKey, JSON.stringify(updated)],
+        ['is_logged_in', 'true'],
+        ['is_guest', 'false'],
       ]);
-    } catch {
-      // profile sync is optional
+      setIsGuest(false);
+      setUserEmail(null);
+      setIsLoggedIn(true);
     }
 
-    setUserPhone(result.phone);
-    setIsLoggedIn(true);
-    showToast('تم تسجيل الدخول بنجاح');
+    showToast('تم تسجيل الدخول عبر Google');
     return true;
   }, [showToast]);
 
@@ -305,11 +385,18 @@ export function AppProvider({ children }: { children: any }) {
     loggingOutRef.current = true;
 
     setIsLoggedIn(false);
+    setIsGuest(false);
+    setUserEmail(null);
     setUserPhone(null);
+    setUserDisplayName(null);
+    setUserPhotoUrl(null);
     await AsyncStorage.multiRemove([
       'is_logged_in',
       'is_guest',
+      'auth_email',
       'auth_phone',
+      'auth_display_name',
+      'auth_photo_url',
       'firebase_refresh_token',
     ]);
 
@@ -403,19 +490,20 @@ export function AppProvider({ children }: { children: any }) {
   }, []);
 
   const refreshNotifications = useCallback(async () => {
-    if (!userPhone) {
+    if (!isLoggedIn || isGuest || (!userEmail && !userPhone)) {
       setNotifications([]);
       return;
     }
     setNotificationsLoading(true);
     try {
       const [items, readIds] = await Promise.all([
-        fetchNotificationsForPhone(userPhone),
+        fetchNotificationsForUser(userEmail, userPhone),
         loadReadNotificationIds(),
       ]);
 
       const mapped: AppNotification[] = items.map((n: any) => ({
         id: n.id,
+        email: n.email,
         phone: n.phone,
         orderId: n.orderId,
         title: n.title || 'إشعار',
@@ -449,7 +537,7 @@ export function AppProvider({ children }: { children: any }) {
     } finally {
       setNotificationsLoading(false);
     }
-  }, [userPhone, loadReadNotificationIds]);
+  }, [isLoggedIn, isGuest, userEmail, userPhone, loadReadNotificationIds]);
 
   const markNotificationsRead = useCallback(async () => {
     if (!notifications.length) return;
@@ -463,7 +551,7 @@ export function AppProvider({ children }: { children: any }) {
   }, [notifications]);
 
   useEffect(() => {
-    if (!isLoggedIn || !userPhone) {
+    if (!isLoggedIn || isGuest || (!userEmail && !userPhone)) {
       setNotifications([]);
       return;
     }
@@ -471,20 +559,20 @@ export function AppProvider({ children }: { children: any }) {
     refreshNotifications();
     const timer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
     return () => clearInterval(timer);
-  }, [isLoggedIn, userPhone, refreshNotifications]);
+  }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications]);
 
   useEffect(() => {
-    if (isLoggedIn && userPhone) {
+    if (isLoggedIn && !isGuest && (userEmail || userPhone)) {
       const sub = AppState.addEventListener('change', (state) => {
         if (state === 'active') refreshNotifications();
       });
       return () => sub.remove();
     }
-  }, [isLoggedIn, userPhone, refreshNotifications]);
+  }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications]);
 
   const submitOrder = useCallback(async (name: string, phone: string, address: string): Promise<boolean> => {
     const totals = getCartTotals();
-    const orderData = {
+    const orderData: Record<string, unknown> = {
       name,
       phone,
       address,
@@ -501,25 +589,30 @@ export function AppProvider({ children }: { children: any }) {
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
+    if (userEmail) orderData.email = userEmail;
+
     const success = await addDocument('orders', orderData);
     if (success) {
       const msg = getOrderStatusNotification('pending');
-      await addDocument('notifications', {
+      const notification: Record<string, unknown> = {
         phone,
         title: msg.title,
         body: msg.body,
         status: 'pending',
-      });
+      };
+      if (userEmail) notification.email = userEmail;
+      await addDocument('notifications', notification);
       clearCart();
       refreshNotifications();
     }
     return success;
-  }, [cart, getCartTotals, clearCart, refreshNotifications]);
+  }, [cart, getCartTotals, clearCart, refreshNotifications, userEmail]);
 
   return (
     <AppContext.Provider
       value={{
-        isLoggedIn, isCheckingAuth, userPhone, requestOtp, verifyOtpAndLogin, logout,
+        isLoggedIn, isCheckingAuth, isGuest, userEmail, userPhone, userDisplayName, userPhotoUrl,
+        loginWithEmail, registerWithEmail, loginAsGuest, loginWithGoogle, finalizeGoogleSignIn, logout,
         categories, products, banners, offers, dataLoading, refreshData, clearCacheAndRefresh,
         cart, addToCart, removeFromCart, updateCartItemQty, clearCart, getCartCount, getCartTotals,
         favorites, toggleFavorite, isFavorite,

@@ -597,9 +597,10 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
         on_the_way: { title: 'طلبك في الطريق 🚚', body: 'السائق في طريقه إليك، استعد لاستلام الطلب' },
     };
     const msg = NOTIF_MSG[nextStatus];
-    if (msg && orderData.phone) {
+    if (msg && (orderData.phone || orderData.email)) {
         await addDoc(collection(db, "notifications"), {
-            phone: orderData.phone,
+            phone: orderData.phone || '',
+            email: orderData.email || '',
             orderId: id,
             title: msg.title,
             body: msg.body,

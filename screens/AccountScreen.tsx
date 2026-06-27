@@ -23,6 +23,8 @@ import {
 } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
+import UserAvatar from '../components/UserAvatar';
+import { resolveUserDisplayName } from '../lib/authConfig';
 import { AppHeader } from '../components/layout';
 
 const PROFILE_KEY = 'customer_profile_v1';
@@ -30,7 +32,7 @@ const LEGACY_PROFILE_KEY = 'user_profile';
 
 export default function AccountScreen() {
   const navigation = useNavigation<any>();
-  const { logout, showToast, userPhone, clearCacheAndRefresh, unreadNotificationCount } = useApp();
+  const { logout, showToast, userPhone, userEmail, userDisplayName, userPhotoUrl, clearCacheAndRefresh, unreadNotificationCount } = useApp();
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -101,6 +103,8 @@ export default function AccountScreen() {
     },
   ];
 
+  const profileName = resolveUserDisplayName(userDisplayName, userEmail);
+
   return (
     <GlassBackground>
       <AppHeader title="حسابي" />
@@ -114,11 +118,13 @@ export default function AccountScreen() {
           colors={[Colors.primary, Colors.primaryDark]}
           style={styles.profileHero}
         >
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={36} color={Colors.white} />
+          <View style={styles.avatarWrap}>
+            <UserAvatar photoUrl={userPhotoUrl} name={profileName} size={72} />
           </View>
-          <Text style={styles.userPhone}>{userPhone || 'مستخدم تفاحة'}</Text>
-          <Text style={styles.userSub}>مرحباً بك في متجر تفاحة</Text>
+          <Text style={styles.userPhone}>{profileName || userPhone || 'مستخدم تفاحة'}</Text>
+          <Text style={styles.userSub}>
+            {userEmail || (userPhone ? userPhone : 'مرحباً بك في متجر تفاحة')}
+          </Text>
         </LinearGradient>
 
         <TouchableOpacity
@@ -199,13 +205,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     ...Shadow.md,
   },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarWrap: {
     marginBottom: Spacing.md,
   },
   userPhone: {
