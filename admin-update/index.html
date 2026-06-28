@@ -72,6 +72,11 @@
           <button class="nav-item" onclick="switchTab('notifications')">
             <i class="fa-solid fa-bell"></i> الإشعارات
           </button>
+
+          <div class="nav-group-label">الإعدادات</div>
+          <button class="nav-item" onclick="switchTab('store-settings')">
+            <i class="fa-solid fa-clock"></i> أوقات العمل
+          </button>
         </nav>
       </aside>
 
@@ -87,7 +92,12 @@
               <div class="topbar-sub" id="page-sub">إدارة طلبات الزبائن</div>
             </div>
           </div>
-          <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
+          <div class="topbar-actions">
+            <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
+            <button type="button" class="logout-btn" onclick="logoutAdmin()">
+              <i class="fa-solid fa-right-from-bracket"></i> خروج
+            </button>
+          </div>
         </header>
 
         <main>
@@ -122,6 +132,13 @@
               </div>
               <input type="hidden" id="cat-id" />
               <div class="form-grid">
+                <div class="form-field">
+                  <label for="cat-parent">القسم الرئيسي (اختياري)</label>
+                  <select id="cat-parent">
+                    <option value="">قسم رئيسي — بدون أب</option>
+                  </select>
+                  <div class="file-field-hint">اختر قسم أب لإنشاء قسم فرعي داخله</div>
+                </div>
                 <div class="form-field">
                   <label for="cat-name">اسم القسم</label>
                   <input type="text" id="cat-name" placeholder="مثال: خضروات" />
@@ -314,6 +331,38 @@
               </button>
             </div>
           </div>
+
+          <!-- أوقات العمل -->
+          <div id="store-settings" class="tab-content">
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-clock"></i>
+                <h2>أوقات استقبال الطلبات</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                التوقيت بتوقيت بغداد. خارج هذه الأوقات يظهر للزبون أن المتجر مغلق (مع إمكانية جدولة الطلب).
+              </p>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="store-open">وقت الفتح</label>
+                  <input type="time" id="store-open" value="08:30" />
+                </div>
+                <div class="form-field">
+                  <label for="store-close">وقت الإغلاق</label>
+                  <input type="time" id="store-close" value="02:00" />
+                </div>
+                <div class="form-field full">
+                  <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+                    <input type="checkbox" id="store-enabled" checked />
+                    تفعيل قيد أوقات العمل
+                  </label>
+                </div>
+              </div>
+              <button class="btn-primary" onclick="saveStoreSettings()">
+                <i class="fa-solid fa-save"></i> حفظ أوقات العمل
+              </button>
+            </div>
+          </div>
         </main>
       </div>
     </div>
@@ -330,6 +379,7 @@
       banners: { title: 'البنرات', sub: 'بانرات الصفحة الرئيسية' },
       sales: { title: 'المبيعات', sub: 'إجمالي الإيرادات' },
       notifications: { title: 'الإشعارات', sub: 'إرسال Push للجميع' },
+      'store-settings': { title: 'أوقات العمل', sub: 'تحديد ساعات استقبال الطلبات' },
     };
 
     window.setAdminPageTitle = (tabId) => {

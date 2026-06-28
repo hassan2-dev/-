@@ -80,6 +80,7 @@ export default function NotificationsScreen() {
       <AppHeader
         title="الإشعارات"
         showBack
+        showCart={false}
         onBack={() => navigation.goBack()}
         rightSlot={
           unreadNotificationCount > 0 ? (

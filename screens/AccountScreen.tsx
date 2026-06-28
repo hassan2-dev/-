@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,8 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   Colors,
   FontSize,
@@ -23,168 +21,222 @@ import {
 } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
+import ScreenHeader from '../components/ScreenHeader';
 import UserAvatar from '../components/UserAvatar';
+import AppIcon from '../components/AppIcon';
 import { resolveUserDisplayName } from '../lib/authConfig';
-import { AppHeader } from '../components/layout';
+import { forwardIconName, rtlInput } from '../lib/rtl';
+import { normalizeIraqiPhone } from '../lib/phone';
+import SavedAddressCard from '../components/SavedAddressCard';
+import {
+  formatApartmentSummary,
+} from '../lib/apartmentCode';
+import { loadCustomerProfile, resolveApartmentFromProfile, saveCustomerProfile, getSavedAddressCode } from '../lib/customerProfile';
 
-const PROFILE_KEY = 'customer_profile_v1';
-const LEGACY_PROFILE_KEY = 'user_profile';
+
+type MenuItem = {
+  icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  badge?: string;
+};
 
 export default function AccountScreen() {
   const navigation = useNavigation<any>();
-  const { logout, showToast, userPhone, userEmail, userDisplayName, userPhotoUrl, clearCacheAndRefresh, unreadNotificationCount } = useApp();
+  const {
+    logout,
+    showToast,
+    userPhone,
+    userEmail,
+    userDisplayName,
+    userPhotoUrl,
+    clearCacheAndRefresh,
+    unreadNotificationCount,
+  } = useApp();
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [savedAddressCode, setSavedAddressCode] = useState('');
+  const [addressSummary, setAddressSummary] = useState('');
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const saved =
-          (await AsyncStorage.getItem(PROFILE_KEY)) ||
-          (await AsyncStorage.getItem(LEGACY_PROFILE_KEY));
-        if (!saved) return;
-        const profile = JSON.parse(saved);
-        setName(profile.name || '');
-        setPhone(profile.phone || userPhone || '');
-        setAddress(profile.address || '');
-      } catch {
-        // ignore
-      }
-    };
-    loadProfile();
+  const loadProfile = useCallback(async () => {
+    const profile = await loadCustomerProfile();
+    if (!profile) return;
+    setName(profile.name || '');
+    setPhone(profile.phone || userPhone || '');
+    const code = getSavedAddressCode(profile);
+    setSavedAddressCode(code);
+    if (code) {
+      const apt = resolveApartmentFromProfile(profile);
+      setAddressSummary(apt ? formatApartmentSummary(apt) : '');
+    } else {
+      setAddressSummary('');
+    }
   }, [userPhone]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
   const saveProfile = async () => {
+    if (!name.trim() || !phone.trim()) {
+      showToast('يرجى إكمال الاسم ورقم الهاتف');
+      return;
+    }
+    const normalizedPhone = normalizeIraqiPhone(phone);
+    if (!normalizedPhone) {
+      showToast('رقم الهاتف غير صحيح — استخدم رقم عراقي (07XXXXXXXXX)');
+      return;
+    }
     try {
-      const profile = {
+      const profile = await loadCustomerProfile();
+      await saveCustomerProfile({
         name: name.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-      };
-      await AsyncStorage.multiSet([
-        [PROFILE_KEY, JSON.stringify(profile)],
-        [LEGACY_PROFILE_KEY, JSON.stringify(profile)],
-      ]);
-      showToast('تم حفظ الملف الشخصي');
+        phone: normalizedPhone,
+        address: profile?.address,
+        apartment: profile?.apartment,
+      });
+      showToast('تم حفظ البيانات');
+      setShowProfileForm(false);
     } catch {
-      showToast('تعذر حفظ الملف الشخصي');
+      showToast('تعذر حفظ البيانات');
     }
   };
 
-  const menuItems = [
+  const profileName = resolveUserDisplayName(userDisplayName, userEmail);
+  const headerSub = userEmail || userPhone || 'إدارة حسابك وطلباتك';
+
+  const accountItems: MenuItem[] = [
     {
-      icon: 'notifications-outline' as const,
-      label: unreadNotificationCount > 0
-        ? `الإشعارات (${unreadNotificationCount})`
-        : 'الإشعارات',
+      icon: 'create-outline',
+      label: 'الاسم والهاتف',
+      onPress: () => setShowProfileForm((v) => !v),
+    },
+    {
+      icon: 'location-outline',
+      label: 'عنوان الشقة',
+      onPress: () => navigation.navigate('DeliveryAddress'),
+    },
+    {
+      icon: 'heart-outline',
+      label: 'المفضلة',
+      onPress: () => navigation.navigate('Favorites'),
+    },
+    {
+      icon: 'notifications-outline',
+      label: 'الإشعارات',
+      badge: unreadNotificationCount > 0 ? String(unreadNotificationCount) : undefined,
       onPress: () => navigation.navigate('Notifications'),
     },
+  ];
+
+  const supportItems: MenuItem[] = [
     {
-      icon: 'refresh-outline' as const,
-      label: 'تحديث البيانات (مسح الكاش)',
-      onPress: () => clearCacheAndRefresh(),
-    },
-    {
-      icon: 'chatbubble-ellipses-outline' as const,
+      icon: 'logo-whatsapp',
       label: 'تواصل معنا',
       onPress: () => Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}`),
     },
     {
-      icon: 'shield-checkmark-outline' as const,
+      icon: 'refresh-outline',
+      label: 'تحديث البيانات',
+      onPress: () => clearCacheAndRefresh(),
+    },
+  ];
+
+  const appItems: MenuItem[] = [
+    {
+      icon: 'shield-checkmark-outline',
       label: 'سياسة الخصوصية',
       onPress: () => navigation.navigate('PrivacyPolicy'),
     },
     {
-      icon: 'information-circle-outline' as const,
+      icon: 'information-circle-outline',
       label: 'حول التطبيق',
       onPress: () => navigation.navigate('AboutApp'),
     },
   ];
 
-  const profileName = resolveUserDisplayName(userDisplayName, userEmail);
+  const renderSection = (title: string, items: MenuItem[]) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>{title}</Text>
+      <View style={styles.sectionCard}>
+        {items.map((item, index) => (
+          <TouchableOpacity
+            key={item.label}
+            style={[styles.menuRow, index < items.length - 1 && styles.menuRowBorder]}
+            onPress={item.onPress}
+          >
+            <View style={styles.menuIconWrap}>
+              <AppIcon name={item.icon} size={20} color={Colors.primary} />
+            </View>
+            <Text style={styles.menuLabel}>{item.label}</Text>
+            {item.badge ? (
+              <View style={styles.menuBadge}>
+                <Text style={styles.menuBadgeText}>{item.badge}</Text>
+              </View>
+            ) : null}
+            <AppIcon name={forwardIconName} size={16} color={Colors.textLight} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <GlassBackground>
-      <AppHeader title="حسابي" />
+      <ScreenHeader mode="page" title="حسابي" subtitle={headerSub} showCart={false} />
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryDark]}
-          style={styles.profileHero}
-        >
-          <View style={styles.avatarWrap}>
-            <UserAvatar photoUrl={userPhotoUrl} name={profileName} size={72} />
-          </View>
-          <Text style={styles.userPhone}>{profileName || userPhone || 'مستخدم تفاحة'}</Text>
-          <Text style={styles.userSub}>
-            {userEmail || (userPhone ? userPhone : 'مرحباً بك في متجر تفاحة')}
-          </Text>
-        </LinearGradient>
+        <View style={styles.profileCard}>
+          <UserAvatar photoUrl={userPhotoUrl} name={profileName} size={64} />
+          <Text style={styles.profileName}>{profileName || 'زبون تفاحة'}</Text>
+          <Text style={styles.profileSub}>{headerSub}</Text>
+        </View>
 
-        <TouchableOpacity
-          style={styles.profileToggle}
-          onPress={() => setShowProfileForm((v) => !v)}
-        >
-          <Ionicons name="create-outline" size={20} color={Colors.primary} />
-          <Text style={styles.profileToggleText}>الملف الشخصي والتوصيل</Text>
-          <Ionicons
-            name={showProfileForm ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color={Colors.textGray}
+        <View style={styles.addressBlock}>
+          <SavedAddressCard
+            addressCode={savedAddressCode}
+            summary={addressSummary}
+            onPress={() => navigation.navigate('DeliveryAddress')}
           />
-        </TouchableOpacity>
+        </View>
 
         {showProfileForm ? (
-          <View style={styles.profileCard}>
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>الاسم ورقم الهاتف</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="الاسم الكامل"
               placeholderTextColor={Colors.textLight}
-              style={styles.input}
+              style={[styles.input, rtlInput]}
             />
             <TextInput
               value={phone}
               onChangeText={setPhone}
-              placeholder="رقم الهاتف"
+              placeholder="07XXXXXXXXX"
               placeholderTextColor={Colors.textLight}
               keyboardType="phone-pad"
-              style={styles.input}
-            />
-            <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder="عنوان التوصيل"
-              placeholderTextColor={Colors.textLight}
-              style={[styles.input, styles.textArea]}
-              multiline
+              style={[styles.input, rtlInput]}
             />
             <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
-              <Text style={styles.saveText}>حفظ البيانات</Text>
+              <Text style={styles.saveBtnText}>حفظ</Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        <View style={styles.menu}>
-          {menuItems.map((item) => (
-            <TouchableOpacity key={item.label} style={styles.menuItem} onPress={item.onPress}>
-              <View style={styles.menuIcon}>
-                <Ionicons name={item.icon} size={20} color={Colors.primary} />
-              </View>
-              <Text style={styles.menuText}>{item.label}</Text>
-              <Ionicons name="chevron-back" size={18} color={Colors.textLight} />
-            </TouchableOpacity>
-          ))}
-        </View>
+        {renderSection('حسابي', accountItems)}
+        {renderSection('الدعم', supportItems)}
+        {renderSection('التطبيق', appItems)}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+          <AppIcon name="log-out-outline" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>تسجيل الخروج</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -196,54 +248,48 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
+    paddingTop: Spacing.md,
     paddingBottom: Layout.tabBarHeight + Spacing.lg,
-  },
-  profileHero: {
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-    ...Shadow.md,
-  },
-  avatarWrap: {
-    marginBottom: Spacing.md,
-  },
-  userPhone: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.white,
-  },
-  userSub: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-  },
-  profileToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    marginBottom: Spacing.md,
-  },
-  profileToggleText: {
-    flex: 1,
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.textDark,
-    textAlign: 'right',
   },
   profileCard: {
     backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    ...Shadow.sm,
+  },
+  profileName: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginTop: Spacing.md,
+  },
+  profileSub: {
+    fontSize: FontSize.sm,
+    color: Colors.textGray,
+    marginTop: 4,
+  },
+  addressBlock: {
+    marginBottom: Spacing.lg,
+  },
+  formCard: {
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    gap: Spacing.sm,
     marginBottom: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    gap: Spacing.sm,
+  },
+  formTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.textDark,
+    textAlign: 'right',
+    marginBottom: Spacing.xs,
   },
   input: {
     backgroundColor: Colors.surfaceMuted,
@@ -256,10 +302,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
+  textArea: { minHeight: 72, textAlignVertical: 'top' },
   saveBtn: {
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.md,
@@ -267,54 +310,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: Spacing.xs,
   },
-  saveText: {
-    color: Colors.white,
+  saveBtnText: { color: Colors.white, fontWeight: '800', fontSize: FontSize.md },
+  section: { marginBottom: Spacing.lg },
+  sectionLabel: {
+    fontSize: FontSize.sm,
     fontWeight: '800',
-    fontSize: FontSize.md,
+    color: Colors.textGray,
+    textAlign: 'right',
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
   },
-  menu: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionCard: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    gap: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    overflow: 'hidden',
+    ...Shadow.sm,
   },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
+  menuRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  menuIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuText: {
+  menuLabel: {
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: '700',
     color: Colors.textDark,
     textAlign: 'right',
   },
+  menuBadge: {
+    backgroundColor: Colors.danger,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  menuBadgeText: { color: Colors.white, fontSize: 11, fontWeight: '800' },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: '#FFF0F0',
+    backgroundColor: '#FFF5F5',
     borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderWidth: 1,
     borderColor: '#FFD6D6',
+    marginTop: Spacing.sm,
   },
-  logoutText: {
-    color: Colors.danger,
-    fontWeight: '800',
-    fontSize: FontSize.md,
-  },
+  logoutText: { color: Colors.danger, fontWeight: '800', fontSize: FontSize.md },
 });

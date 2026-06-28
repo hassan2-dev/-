@@ -1,18 +1,13 @@
-import { I18nManager, Platform } from 'react-native';
-
-if (!I18nManager.isRTL) {
-  I18nManager.allowRTL(true);
-  I18nManager.forceRTL(true);
-}
+import { Platform } from 'react-native';
 
 export const Colors = {
   primary: '#3D9B4F',
   primaryDark: '#2B7340',
   primaryLight: '#E8F5EA',
   accent: '#FF8C42',
-  background: '#F4F7F2',
+  background: '#F6F8F5',
   surface: '#FFFFFF',
-  surfaceMuted: '#FAFCFA',
+  surfaceMuted: '#F0F4F1',
   textDark: '#1A2A1C',
   textGray: '#5C6B5E',
   textLight: '#94A396',
@@ -97,8 +92,10 @@ export const Shadow = {
 
 export const Layout = {
   screenPadding: Spacing.lg,
-  tabBarHeight: 72,
+  tabBarHeight: 58,
   headerHeight: 56,
+  headerContentGap: Spacing.md,
+  homeHeaderContentGap: Spacing.xl,
 };
 
 export const DELIVERY_COST = 1000;

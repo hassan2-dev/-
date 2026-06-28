@@ -169,6 +169,86 @@ const formatOrderDateTime = (value) => {
 
 const getOrderStatusLabel = (status) => ORDER_STATUS_LABELS[status] || status || 'غير معروف';
 
+const APARTMENT_FLOORS = [
+    { value: 'G', label: 'الأرضي' },
+    { value: '01', label: 'الطابق الأول' },
+    { value: '02', label: 'الطابق الثاني' },
+    { value: '03', label: 'الطابق الثالث' },
+    { value: '04', label: 'الطابق الرابع' },
+    { value: '05', label: 'الطابق الخامس' },
+    { value: '06', label: 'الطابق السادس' },
+    { value: '07', label: 'الطابق السابع' },
+    { value: '08', label: 'الطابق الثامن' },
+    { value: '09', label: 'الطابق التاسع' },
+];
+
+const APARTMENT_CODE_REGEX = /^([AB]\d)-(\d{2})-(G|\d{2})-(\d{2})$/i;
+
+const getFloorLabel = (floor) =>
+    APARTMENT_FLOORS.find((f) => f.value === floor)?.label || floor;
+
+const parseApartmentCode = (code) => {
+    if (!code) return null;
+    const match = String(code).trim().toUpperCase().match(APARTMENT_CODE_REGEX);
+    if (!match) return null;
+    const [, block, buildingStr, floorRaw, apartmentStr] = match;
+    return {
+        block,
+        building: parseInt(buildingStr, 10),
+        floor: floorRaw === 'G' ? 'G' : floorRaw,
+        apartment: parseInt(apartmentStr, 10),
+    };
+};
+
+const formatApartmentSummary = (selection) =>
+    `بلوك ${selection.block} · بناية ${String(selection.building).padStart(2, '0')} · ${getFloorLabel(selection.floor)} · شقة ${String(selection.apartment).padStart(2, '0')}`;
+
+const buildOrderAddressHtml = (rawAddress) => {
+    const addressValue = rawAddress ? String(rawAddress).trim() : '';
+    if (!addressValue) {
+        return `<div class="order-address-box order-address-empty">
+            <div class="order-address-title"><i class="fa-solid fa-location-dot"></i> عنوان التوصيل</div>
+            <div class="order-address-missing">غير متوفر</div>
+        </div>`;
+    }
+
+    const parsed = parseApartmentCode(addressValue);
+    if (!parsed) {
+        return `<div class="order-address-box">
+            <div class="order-address-title"><i class="fa-solid fa-location-dot"></i> عنوان التوصيل</div>
+            <div class="order-address-raw">${escapeHtml(addressValue)}</div>
+        </div>`;
+    }
+
+    const building = String(parsed.building).padStart(2, '0');
+    const apartment = String(parsed.apartment).padStart(2, '0');
+    const floorLabel = getFloorLabel(parsed.floor);
+
+    return `<div class="order-address-box">
+        <div class="order-address-title"><i class="fa-solid fa-location-dot"></i> عنوان التوصيل</div>
+        <div class="order-address-code">${escapeHtml(addressValue.toUpperCase())}</div>
+        <div class="order-address-summary">${escapeHtml(formatApartmentSummary(parsed))}</div>
+        <div class="order-address-grid">
+            <div class="order-address-item">
+                <span class="order-address-label">البلوك</span>
+                <span class="order-address-value">${escapeHtml(parsed.block)}</span>
+            </div>
+            <div class="order-address-item">
+                <span class="order-address-label">البناية</span>
+                <span class="order-address-value">${escapeHtml(building)}</span>
+            </div>
+            <div class="order-address-item">
+                <span class="order-address-label">الطابق</span>
+                <span class="order-address-value">${escapeHtml(floorLabel)}</span>
+            </div>
+            <div class="order-address-item">
+                <span class="order-address-label">الشقة</span>
+                <span class="order-address-value">${escapeHtml(apartment)}</span>
+            </div>
+        </div>
+    </div>`;
+};
+
 const escapeHtml = (str) => {
     if (str == null) return '';
     return String(str)
@@ -288,17 +368,54 @@ async function uploadImageGetUrl(file, maxWidth = 1000, quality = 0.8) {
     return url;
 }
 
-window.verifyAdmin = () => {
-    const pass = document.getElementById('admin-pass').value;
-    if (pass === '1001') {
-        document.getElementById('login-overlay').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('app-content').style.display = 'block';
-            switchTab('orders');
-        }, 500);
-    } else { alert('رمز الدخول غير صحيح!'); }
+const ADMIN_SESSION_KEY = 'tufaha_admin_session_v1';
+
+function enterAdminDashboard(initialTab = 'orders') {
+    const overlay = document.getElementById('login-overlay');
+    const app = document.getElementById('app-content');
+    if (!overlay || !app) return;
+
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        app.style.display = 'block';
+        switchTab(initialTab);
+    }, 300);
+}
+
+function showLoginScreen() {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    const overlay = document.getElementById('login-overlay');
+    const app = document.getElementById('app-content');
+    if (app) app.style.display = 'none';
+    if (overlay) {
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+    }
+    const passInput = document.getElementById('admin-pass');
+    if (passInput) passInput.value = '';
+}
+
+window.logoutAdmin = () => {
+    if (!confirm('تسجيل الخروج من لوحة الإدارة؟')) return;
+    showLoginScreen();
 };
+
+window.verifyAdmin = () => {
+    const pass = document.getElementById('admin-pass')?.value;
+    if (pass === '1001') {
+        localStorage.setItem(ADMIN_SESSION_KEY, '1');
+        enterAdminDashboard('orders');
+    } else {
+        alert('رمز الدخول غير صحيح!');
+    }
+};
+
+function initAdminSession() {
+    if (localStorage.getItem(ADMIN_SESSION_KEY) === '1') {
+        enterAdminDashboard('orders');
+    }
+}
 
 window.switchTab = (tabId) => {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -318,20 +435,50 @@ window.switchTab = (tabId) => {
     if(tabId === 'accepted-orders') loadOrders('accepted');
     if(tabId === 'sales') loadSales();
     if(tabId === 'notifications') loadPushTokenStats();
+    if(tabId === 'store-settings') loadStoreSettings();
+};
+
+// === أوقات العمل ===
+window.loadStoreSettings = async () => {
+    const snap = await getDoc(doc(db, 'settings', 'store'));
+    const data = snap.data() || {};
+    const openEl = document.getElementById('store-open');
+    const closeEl = document.getElementById('store-close');
+    const enabledEl = document.getElementById('store-enabled');
+    if (openEl) openEl.value = data.openTime || '08:30';
+    if (closeEl) closeEl.value = data.closeTime || '02:00';
+    if (enabledEl) enabledEl.checked = data.enabled !== false;
+};
+
+window.saveStoreSettings = async () => {
+    const openTime = document.getElementById('store-open')?.value || '08:30';
+    const closeTime = document.getElementById('store-close')?.value || '02:00';
+    const enabled = document.getElementById('store-enabled')?.checked !== false;
+    await setDoc(doc(db, 'settings', 'store'), {
+        openTime,
+        closeTime,
+        timezone: 'Asia/Baghdad',
+        enabled,
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await bumpDataVersion();
+    showCustomAlert('تم حفظ أوقات العمل');
 };
 
 // === الأقسام ===
 window.saveCategory = async () => {
     const id = document.getElementById('cat-id').value;
     const name = document.getElementById('cat-name').value;
+    const parentId = document.getElementById('cat-parent')?.value || '';
     const file = document.getElementById('cat-img').files[0];
     if (!name) return showCustomAlert('أدخل اسم القسم');
     const btn = document.getElementById('btn-save-cat');
     btn.innerText = 'جاري الرفع...';
 
     try {
-        // ✅ كل عملية حفظ/تعديل تكتب updatedAt
         let updateData = { name, updatedAt: serverTimestamp() };
+        if (parentId) updateData.parentId = parentId;
+        else updateData.parentId = '';
         if (file) {
             updateData.image = await uploadImageGetUrl(file, 400, 0.7);
         }
@@ -346,36 +493,59 @@ window.saveCategory = async () => {
         document.getElementById('cat-id').value = '';
         document.getElementById('cat-name').value = '';
         document.getElementById('cat-img').value = '';
+        if (document.getElementById('cat-parent')) document.getElementById('cat-parent').value = '';
     } catch (e) { showCustomAlert(e.message); }
     btn.innerHTML = 'حفظ القسم <i class="fa-solid fa-save"></i>';
+};
+
+window.loadParentCategoriesForSelect = async (selectId, selectedId = '') => {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">قسم رئيسي — بدون أب</option>';
+    const snapshot = await getDocs(collection(db, "categories"));
+    snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.parentId) return;
+        const selected = selectedId === docSnap.id ? 'selected' : '';
+        select.innerHTML += `<option value="${docSnap.id}" ${selected}>${escapeHtml(data.name)}</option>`;
+    });
 };
 
 window.loadCategories = async () => {
     const list = document.getElementById('categories-list');
     list.innerHTML = loadingState();
+    await loadParentCategoriesForSelect('cat-parent');
     const snapshot = await getDocs(collection(db, "categories"));
+    const allCats = [];
+    snapshot.forEach(docSnap => allCats.push({ id: docSnap.id, ...docSnap.data() }));
+    const parentMap = Object.fromEntries(allCats.filter(c => !c.parentId).map(c => [c.id, c.name]));
     list.innerHTML = '';
     if (snapshot.empty) {
         list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام بعد');
         return;
     }
-    snapshot.forEach(docSnap => {
-        const data = docSnap.data();
+    allCats.forEach(data => {
+        const parentLabel = data.parentId ? parentMap[data.parentId] : null;
         const safeName = escapeHtml(data.name);
+        const badge = parentLabel
+            ? `<div class="order-meta"><i class="fa-solid fa-folder-tree"></i> فرعي ضمن: ${escapeHtml(parentLabel)}</div>`
+            : `<div class="order-meta"><i class="fa-solid fa-layer-group"></i> قسم رئيسي</div>`;
         list.innerHTML += `<div class="card-3d">
             <img src="${escapeHtml(data.image || '')}" alt="${safeName}" onerror="this.style.display='none'">
             <div class="card-title">${safeName}</div>
+            ${badge}
             <div class="card-actions">
-                <button class="btn-action edit" onclick="editCategory('${docSnap.id}', '${jsStr(data.name)}')"><i class="fa-solid fa-pen"></i> تعديل</button>
-                <button class="btn-action delete" onclick="deleteDocItem('categories', '${docSnap.id}', null, loadCategories)"><i class="fa-solid fa-trash"></i> حذف</button>
+                <button class="btn-action edit" onclick="editCategory('${data.id}', '${jsStr(data.name)}', '${jsStr(data.parentId || '')}')"><i class="fa-solid fa-pen"></i> تعديل</button>
+                <button class="btn-action delete" onclick="deleteDocItem('categories', '${data.id}', null, loadCategories)"><i class="fa-solid fa-trash"></i> حذف</button>
             </div>
         </div>`;
     });
 };
 
-window.editCategory = (id, name) => {
+window.editCategory = async (id, name, parentId = '') => {
     document.getElementById('cat-id').value = id;
     document.getElementById('cat-name').value = name;
+    await loadParentCategoriesForSelect('cat-parent', parentId || '');
     document.getElementById('btn-save-cat').innerText = 'تحديث القسم';
 };
 
@@ -383,7 +553,13 @@ window.loadCategoriesForSelect = async () => {
     const select = document.getElementById('prod-cat');
     select.innerHTML = '<option value="">اختر القسم</option>';
     const snapshot = await getDocs(collection(db, "categories"));
-    snapshot.forEach(docSnap => { select.innerHTML += `<option value="${docSnap.data().name}">${docSnap.data().name}</option>`; });
+    const allCats = [];
+    snapshot.forEach(docSnap => allCats.push({ id: docSnap.id, ...docSnap.data() }));
+    const parentMap = Object.fromEntries(allCats.filter(c => !c.parentId).map(c => [c.id, c.name]));
+    allCats.forEach(data => {
+        const prefix = data.parentId && parentMap[data.parentId] ? `${parentMap[data.parentId]} › ` : '';
+        select.innerHTML += `<option value="${escapeHtml(data.name)}">${prefix}${escapeHtml(data.name)}</option>`;
+    });
 };
 
 // === المنتجات ===
@@ -654,6 +830,7 @@ window.loadOrders = async (status) => {
         });
 
         const addressValue = data.address || data.Address || data.location || data.Location;
+        const addressHtml = buildOrderAddressHtml(addressValue);
         const statusClass = data.status || 'pending';
 
         list.innerHTML += `<div class="card-3d order-card">
@@ -664,8 +841,9 @@ window.loadOrders = async (status) => {
                 </div>
                 <span class="order-status ${statusClass}">${getOrderStatusLabel(data.status)}</span>
             </div>
-            <div class="order-meta"><strong>العنوان:</strong> ${escapeHtml(addressValue || 'غير متوفر')}</div>
+            ${addressHtml}
             <div class="order-meta"><strong>تاريخ الطلب:</strong> ${formatOrderDateTime(data.createdAt)}</div>
+            ${data.isScheduled && data.scheduledAt ? `<div class="order-meta" style="color:#2B7340;font-weight:700"><strong>⏰ توصيل مجدول:</strong> ${formatOrderDateTime(data.scheduledAt)}</div>` : ''}
             ${data.statusUpdatedAt ? `<div class="order-meta"><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : ''}
             <div class="order-items">${itemsHtml || '<div class="order-meta">لا توجد تفاصيل</div>'}</div>
             <div class="order-total">الإجمالي: ${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع</div>
@@ -838,3 +1016,5 @@ window.sendBroadcastNotification = async () => {
         }
     }
 };
+
+initAdminSession();

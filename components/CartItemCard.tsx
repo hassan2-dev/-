@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../lib/theme';
 import { CartItem } from '../lib/types';
+import { resolveProductImage } from '../lib/productImage';
 import { useApp } from '../context/AppProvider';
+import RemoteImage from './RemoteImage';
 
 interface Props {
   item: CartItem;
@@ -14,7 +16,7 @@ export default function CartItemCard({ item }: Props) {
 
   return (
     <View style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
+      <RemoteImage uri={resolveProductImage(item)} style={styles.image} iconSize={22} />
       <View style={styles.details}>
         <Text style={styles.name} numberOfLines={2}>
           {item.name}

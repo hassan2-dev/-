@@ -14,7 +14,7 @@ export default function FavoritesScreen() {
 
   return (
     <GlassBackground>
-      <AppHeader title="المفضلة" subtitle="منتجاتك المحفوظة" />
+      <AppHeader title="المفضلة" subtitle="منتجاتك المحفوظة" showBack showCart />
 
       <ScrollView
         style={styles.content}

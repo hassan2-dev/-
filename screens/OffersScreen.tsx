@@ -14,7 +14,11 @@ export default function OffersScreen() {
 
   return (
     <GlassBackground>
-      <AppHeader title="الخصومات" subtitle="أفضل العروض" showCart />
+      <AppHeader
+        title="العروض"
+        subtitle={`${discountedProducts.length} منتج مخفّض`}
+        showCart
+      />
 
       <ScrollView
         style={styles.content}
@@ -34,6 +38,7 @@ export default function OffersScreen() {
               navigation.navigate('ProductDetail', { productId })
             }
             pageSize={20}
+            showMeta={false}
           />
         )}
       </ScrollView>

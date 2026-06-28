@@ -3,9 +3,9 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   View,
 } from 'react-native';
+import RemoteImage from './RemoteImage';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../lib/theme';
 import { Category } from '../lib/types';
 
@@ -18,7 +18,7 @@ export default function CategoryCard({ category, onPress }: Props) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.imageWrap}>
-        <Image source={{ uri: category.image }} style={styles.image} resizeMode="cover" />
+        <RemoteImage uri={category.image} style={styles.image} fallbackLabel={category.name} />
       </View>
       <Text style={styles.name} numberOfLines={2}>
         {category.name}
@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
   card: {
     width: 88,
     alignItems: 'center',
-    marginLeft: Spacing.sm,
+    marginStart: Spacing.sm,
   },
   imageWrap: {
     width: 76,

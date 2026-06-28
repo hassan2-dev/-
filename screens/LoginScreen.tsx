@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, FontSize, Spacing } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
+import AppBrandLogo from '../components/AppBrandLogo';
 import { hasGoogleAuthConfig } from '../lib/authConfig';
 import { promptGoogleSignIn, googleSignInErrorMessage } from '../lib/googleSignIn';
 
@@ -61,11 +62,8 @@ export default function LoginScreen() {
   return (
     <GlassBackground>
       <View style={[styles.container, { paddingTop: insets.top + 80 }]}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="nutrition" size={50} color={Colors.white} />
-          </View>
-          <Text style={styles.appName}>تفاحة</Text>
+        <View style={styles.logoSpacer}>
+          <AppBrandLogo size={120} />
         </View>
 
         <View style={styles.form}>
@@ -97,31 +95,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.xl,
   },
-  logoContainer: {
+  logoSpacer: {
     alignItems: 'center',
     marginBottom: 60,
-  },
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  appName: {
-    fontSize: FontSize.title,
-    fontWeight: 'bold',
-    color: Colors.textDark,
-    marginTop: Spacing.lg,
-    textShadowColor: 'rgba(255,255,255,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
   },
   form: {
     paddingHorizontal: Spacing.lg,

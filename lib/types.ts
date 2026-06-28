@@ -1,7 +1,19 @@
+import type { ApartmentSelection } from './apartmentCode';
+
+export type { ApartmentSelection };
+
 export interface Category {
   id: string;
   name: string;
   image: string;
+  parentId?: string;
+}
+
+export interface StoreSettings {
+  openTime: string;
+  closeTime: string;
+  timezone: string;
+  enabled: boolean;
 }
 
 export interface Product {
@@ -54,18 +66,23 @@ export interface OrderRecord {
   status: OrderStatus | string;
   createdAt?: string;
   statusUpdatedAt?: string;
+  scheduledAt?: string;
+  isScheduled?: boolean;
 }
 
 export interface UserProfile {
   name: string;
   phone: string;
   address: string;
+  apartment?: ApartmentSelection;
 }
 
 export type RootStackParamList = {
   Login: undefined;
   MainTabs: undefined;
   CategoryProducts: { categoryName: string };
+  SubCategories: { parentId: string; parentName: string };
   ProductDetail: { productId: string };
   Cart: undefined;
+  DeliveryAddress: undefined;
 };

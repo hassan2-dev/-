@@ -1,12 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken } from '../lib/firebase';
+import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken, getDocument } from '../lib/firebase';
 import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
 import { initPushNotifications, showLocalNotification, registerExpoPushToken, getPushPlatform, addNotificationListeners } from '../lib/pushNotifications';
 import { getOrderStatusNotification } from '../lib/notificationMessages';
-import { Category, Product, CartItem } from '../lib/types';
+import { Category, Product, CartItem, StoreSettings } from '../lib/types';
+import { normalizeProduct } from '../lib/productImage';
 import { DELIVERY_COST } from '../lib/theme';
+import {
+  DEFAULT_STORE_SETTINGS,
+  isStoreOpen as checkStoreOpen,
+  parseStoreSettings,
+} from '../lib/storeHours';
 
 export interface AppNotification {
   id: string;
@@ -69,7 +75,16 @@ interface AppContextType {
   isFavorite: (productId: string) => boolean;
 
   // Orders
-  submitOrder: (name: string, phone: string, address: string) => Promise<boolean>;
+  submitOrder: (
+    name: string,
+    phone: string,
+    address: string,
+    scheduledAt?: string | null
+  ) => Promise<boolean>;
+
+  // Store hours
+  storeSettings: StoreSettings;
+  isStoreOpen: boolean;
 
   // Notifications
   notifications: AppNotification[];
@@ -98,6 +113,8 @@ export function AppProvider({ children }: { children: any }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [banners, setBanners] = useState<string[]>([]);
   const [offers, setOffers] = useState<string[]>([]);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_STORE_SETTINGS);
+  const [storeHoursTick, setStoreHoursTick] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -114,6 +131,12 @@ export function AppProvider({ children }: { children: any }) {
   const fetchAllDataRef = useRef<(f?: boolean) => void>(() => {});
   const CATALOG_REFRESH_THROTTLE_MS = 15000;
   const NOTIFICATION_POLL_MS = 25000;
+  const STORE_HOURS_CHECK_MS = 60000;
+
+  const isStoreOpen = useMemo(
+    () => checkStoreOpen(storeSettings),
+    [storeSettings, storeHoursTick]
+  );
 
   const unreadNotificationCount = notifications.filter((n) => !n.read).length;
 
@@ -126,8 +149,23 @@ export function AppProvider({ children }: { children: any }) {
   useEffect(() => {
     loadLocalData();
     bootstrapFromCache();
+    loadStoreSettings();
     fetchAllData(false);
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setStoreHoursTick((t) => t + 1), STORE_HOURS_CHECK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function loadStoreSettings() {
+    try {
+      const raw = await getDocument('settings', 'store');
+      setStoreSettings(parseStoreSettings(raw));
+    } catch {
+      setStoreSettings(DEFAULT_STORE_SETTINGS);
+    }
+  }
 
   const refreshData = useCallback(async () => {
     await fetchAllData(true);
@@ -189,7 +227,7 @@ export function AppProvider({ children }: { children: any }) {
         readCachedCollection('offers'),
       ]);
       if (cats && cats.length) setCategories(cats as Category[]);
-      if (prods && prods.length) setProducts(prods as Product[]);
+      if (prods && prods.length) setProducts(prods.map((p: any) => normalizeProduct(p)));
       if (bans && bans.length) setBanners(bans.map((b: any) => b.image).filter(Boolean));
       if (offs && offs.length) setOffers(offs.map((o: any) => o.image).filter(Boolean));
     } catch (e) {}
@@ -239,7 +277,9 @@ export function AppProvider({ children }: { children: any }) {
       await new Promise((r) => setTimeout(r, 200));
 
       const prods = await fetchCollectionFresh('products');
-      if (prods.data.length) setProducts(prods.data as Product[]);
+      if (prods.data.length) {
+        setProducts(prods.data.map((p: any) => normalizeProduct(p)));
+      }
       await new Promise((r) => setTimeout(r, 200));
 
       const bans = await fetchCollectionFresh('banners');
@@ -252,6 +292,8 @@ export function AppProvider({ children }: { children: any }) {
       if (offs.data.length) {
         setOffers(offs.data.map((o: any) => o.image).filter(Boolean));
       }
+
+      await loadStoreSettings();
 
       const serverVersion = await fetchServerVersion();
       if (serverVersion) {
@@ -609,7 +651,17 @@ export function AppProvider({ children }: { children: any }) {
     }
   }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications]);
 
-  const submitOrder = useCallback(async (name: string, phone: string, address: string): Promise<boolean> => {
+  const submitOrder = useCallback(async (
+    name: string,
+    phone: string,
+    address: string,
+    scheduledAt?: string | null
+  ): Promise<boolean> => {
+    const isScheduled = !!scheduledAt;
+    if (!isScheduled && storeSettings.enabled && !checkStoreOpen(storeSettings)) {
+      return false;
+    }
+
     const totals = getCartTotals();
     const orderData: Record<string, unknown> = {
       name,
@@ -626,8 +678,10 @@ export function AppProvider({ children }: { children: any }) {
       total: totals.total,
       totalDiscount: totals.discount,
       status: 'pending',
+      isScheduled,
       createdAt: new Date().toISOString(),
     };
+    if (scheduledAt) orderData.scheduledAt = scheduledAt;
     if (userEmail) orderData.email = userEmail;
 
     const success = await addDocument('orders', orderData);
@@ -645,7 +699,7 @@ export function AppProvider({ children }: { children: any }) {
       refreshNotifications();
     }
     return success;
-  }, [cart, getCartTotals, clearCart, refreshNotifications, userEmail]);
+  }, [cart, getCartTotals, clearCart, refreshNotifications, userEmail, storeSettings]);
 
   return (
     <AppContext.Provider
@@ -656,6 +710,7 @@ export function AppProvider({ children }: { children: any }) {
         cart, addToCart, removeFromCart, updateCartItemQty, clearCart, getCartCount, getCartTotals,
         favorites, toggleFavorite, isFavorite,
         submitOrder,
+        storeSettings, isStoreOpen,
         notifications, unreadNotificationCount, notificationsLoading,
         refreshNotifications, markNotificationsRead,
         toasts, showToast,

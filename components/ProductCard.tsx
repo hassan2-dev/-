@@ -5,24 +5,30 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../lib/theme';
 import { Product } from '../lib/types';
+import { resolveProductImage } from '../lib/productImage';
 import { useApp } from '../context/AppProvider';
+import RemoteImage from './RemoteImage';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md) / 2;
+const GRID_CARD_W = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md) / 2;
 
 interface Props {
   product: Product;
   onPress: () => void;
+  compact?: boolean;
 }
 
-export default function ProductCard({ product, onPress }: Props) {
+export default function ProductCard({ product, onPress, compact = false }: Props) {
   const { addToCart, toggleFavorite, isFavorite } = useApp();
   const fav = isFavorite(product.id);
+  const imageUri = resolveProductImage(product);
+  const cardWidth = compact ? '100%' : GRID_CARD_W;
+  const imageHeight = compact ? 118 : 136;
+
   const discountPct =
     product.hasDiscount && product.originalPrice
       ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -30,17 +36,19 @@ export default function ProductCard({ product, onPress }: Props) {
 
   return (
     <TouchableOpacity
-      style={[styles.card, { width: CARD_WIDTH }]}
+      style={[styles.card, { width: cardWidth }]}
       onPress={onPress}
-      activeOpacity={0.92}
+      activeOpacity={0.9}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: product.image }} style={styles.image} resizeMode="cover" />
+        <RemoteImage uri={imageUri} style={{ width: '100%', height: imageHeight }} fallbackLabel={product.name} />
+
         {discountPct > 0 ? (
           <View style={styles.discountBadge}>
             <Text style={styles.discountText}>-{discountPct}%</Text>
           </View>
         ) : null}
+
         <TouchableOpacity
           style={styles.favButton}
           onPress={() => toggleFavorite(product.id)}
@@ -48,9 +56,17 @@ export default function ProductCard({ product, onPress }: Props) {
         >
           <Ionicons
             name={fav ? 'heart' : 'heart-outline'}
-            size={18}
+            size={16}
             color={fav ? Colors.danger : Colors.textGray}
           />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addFab}
+          onPress={() => addToCart(product)}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Ionicons name="add" size={18} color={Colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -60,18 +76,11 @@ export default function ProductCard({ product, onPress }: Props) {
         </Text>
         <View style={styles.priceRow}>
           {product.hasDiscount && product.originalPrice ? (
-            <Text style={styles.oldPrice}>
-              {product.originalPrice.toLocaleString()}
-            </Text>
+            <Text style={styles.oldPrice}>{product.originalPrice.toLocaleString()}</Text>
           ) : null}
           <Text style={styles.price}>{product.price.toLocaleString()} د.ع</Text>
         </View>
       </View>
-
-      <TouchableOpacity style={styles.addButton} onPress={() => addToCart(product)}>
-        <Ionicons name="add" size={18} color={Colors.white} />
-        <Text style={styles.addButtonText}>أضف</Text>
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
@@ -80,26 +89,24 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    ...Shadow.sm,
+    ...Shadow.md,
   },
   imageWrap: {
     position: 'relative',
     backgroundColor: Colors.surfaceMuted,
-  },
-  image: {
-    width: '100%',
-    height: 128,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    overflow: 'hidden',
   },
   discountBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    start: 8,
     backgroundColor: Colors.accent,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.sm,
   },
   discountText: {
@@ -110,20 +117,32 @@ const styles = StyleSheet.create({
   favButton: {
     position: 'absolute',
     top: 8,
-    left: 8,
+    end: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sm,
+  },
+  addFab: {
+    position: 'absolute',
+    bottom: 8,
+    end: 8,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadow.sm,
   },
   info: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
-    minHeight: 72,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    minHeight: 68,
   },
   name: {
     fontSize: FontSize.sm,
@@ -135,6 +154,7 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     alignItems: 'flex-end',
+    gap: 2,
   },
   oldPrice: {
     textDecorationLine: 'line-through',
@@ -145,21 +165,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
     fontSize: FontSize.md,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    margin: Spacing.sm,
-    marginTop: 0,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.md,
-    gap: 4,
-  },
-  addButtonText: {
-    color: Colors.white,
-    fontWeight: '800',
-    fontSize: FontSize.sm,
   },
 });

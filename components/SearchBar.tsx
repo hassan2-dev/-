@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSize, Spacing } from '../lib/theme';
+import { rtlInput } from '../lib/rtl';
 
 interface Props {
   value: string;
@@ -14,12 +15,11 @@ export default function SearchBar({ value, onChangeText, placeholder = 'ابحث
     <View style={styles.container}>
       <Ionicons name="search" size={18} color={Colors.textDark} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, rtlInput]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={Colors.textGray}
-        textAlign="right"
       />
     </View>
   );

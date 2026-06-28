@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors, Layout, Spacing } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
@@ -14,6 +14,7 @@ export default function CategoryProductsScreen() {
   const { categoryName } = route.params;
   const { products } = useApp();
   const [search, setSearch] = useState('');
+  const isSearchOpen = search.trim().length > 0;
 
   const categoryProducts = useMemo(
     () => products.filter((p) => p.category === categoryName),
@@ -56,6 +57,8 @@ export default function CategoryProductsScreen() {
         contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={!isSearchOpen}
+        pointerEvents={isSearchOpen ? 'none' : 'auto'}
       >
         <SectionHeader
           title={search.trim() ? 'نتائج البحث' : 'منتجات القسم'}
@@ -75,8 +78,16 @@ export default function CategoryProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-  searchWrap: { marginTop: -Spacing.xs },
-  content: { flex: 1 },
+  searchWrap: {
+    marginTop: -Spacing.xs,
+    paddingHorizontal: Layout.screenPadding,
+    zIndex: 1000,
+    ...Platform.select({
+      android: { elevation: 1000 },
+      default: {},
+    }),
+  },
+  content: { flex: 1, zIndex: 0 },
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingBottom: Layout.tabBarHeight + Spacing.lg,

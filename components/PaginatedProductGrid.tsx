@@ -11,6 +11,7 @@ interface Props {
   onProductPress: (productId: string) => void;
   pageSize?: number;
   emptyText?: string;
+  showMeta?: boolean;
 }
 
 export default function PaginatedProductGrid({
@@ -18,6 +19,7 @@ export default function PaginatedProductGrid({
   onProductPress,
   pageSize = 20,
   emptyText = 'لا توجد منتجات',
+  showMeta = true,
 }: Props) {
   const { visibleItems, hasMore, loadMore, total, shown } = usePagination(products, pageSize);
 
@@ -27,9 +29,11 @@ export default function PaginatedProductGrid({
 
   return (
     <View>
-      <View style={styles.metaRow}>
-        <Text style={styles.countText}>عرض {shown} من {total}</Text>
-      </View>
+      {showMeta ? (
+        <View style={styles.metaRow}>
+          <Text style={styles.countText}>عرض {shown} من {total}</Text>
+        </View>
+      ) : null}
       <View style={styles.grid}>
         {visibleItems.map((prod) => (
           <ProductCard
@@ -60,6 +64,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.md,
     marginBottom: Spacing.md,
+    paddingTop: Spacing.xs,
   },
   countText: {
     textAlign: 'right',

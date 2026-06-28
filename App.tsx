@@ -1,114 +1,133 @@
 import React from 'react';
-import { StyleSheet, I18nManager, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AppProvider, useApp } from './context/AppProvider';
 import { Colors, FontSize, Layout } from './lib/theme';
+import { TabIcons } from './components/AppIcon';
+import TabCartButton from './components/TabCartButton';
 import Toast from './components/Toast';
+import OfflineOverlay from './components/OfflineOverlay';
 import RedAppleLogo from './components/RedAppleLogo';
 
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
+import CatalogScreen from './screens/CatalogScreen';
+import CartTabScreen from './screens/CartTabScreen';
 import OffersScreen from './screens/OffersScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import AccountScreen from './screens/AccountScreen';
 import CategoryProductsScreen from './screens/CategoryProductsScreen';
+import SubCategoriesScreen from './screens/SubCategoriesScreen';
 import ProductDetailScreen from './screens/ProductDetailScreen';
 import CartScreen from './screens/CartScreen';
+import StoreClosedOverlay from './components/StoreClosedOverlay';
 import PrivacyPolicyScreen from './screens/PrivacyPolicyScreen';
 import AboutAppScreen from './screens/AboutAppScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import DeliveryAddressScreen from './screens/DeliveryAddressScreen';
+import OrderThankYouScreen from './screens/OrderThankYouScreen';
+import MyOrdersScreen from './screens/MyOrdersScreen';
 
-if (!I18nManager.isRTL) {
-  I18nManager.allowRTL(true);
-  I18nManager.forceRTL(true);
-}
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function TabIcon({
-  name,
-  focused,
-}: {
-  name: keyof typeof Ionicons.glyphMap;
-  focused: boolean;
-}) {
-  if (focused) {
-    return (
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryDark]}
-        style={styles.tabIconActive}
-      >
-        <Ionicons name={name} size={20} color={Colors.white} />
-      </LinearGradient>
-    );
-  }
+function MainTabsInner() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === 'ios' ? Math.max(insets.bottom - 4, 0) : 4;
+
   return (
-    <View style={styles.tabIcon}>
-      <Ionicons name={name} size={22} color={Colors.tabInactive} />
-    </View>
+    <>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: Colors.primary,
+          tabBarInactiveTintColor: Colors.tabInactive,
+          tabBarLabelStyle: styles.tabLabel,
+          tabBarStyle: {
+            ...styles.tabBar,
+            height: Layout.tabBarHeight + bottomInset,
+            paddingBottom: bottomInset,
+          },
+        }}
+      >
+        <Tab.Screen
+          name="HomeTab"
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'الرئيسية',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons
+                name={focused ? TabIcons.home.active : TabIcons.home.inactive}
+                size={size ?? 22}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="CatalogTab"
+          component={CatalogScreen}
+          options={{
+            tabBarLabel: 'تسوق',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons
+                name={focused ? TabIcons.shop.active : TabIcons.shop.inactive}
+                size={size ?? 22}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="CartTab"
+          component={CartTabScreen}
+          options={{
+            tabBarLabel: () => null,
+            tabBarButton: (props) => <TabCartButton {...props} />,
+          }}
+        />
+        <Tab.Screen
+          name="OffersTab"
+          component={OffersScreen}
+          options={{
+            tabBarLabel: 'العروض',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons
+                name={focused ? TabIcons.offers.active : TabIcons.offers.inactive}
+                size={size ?? 22}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="AccountTab"
+          component={AccountScreen}
+          options={{
+            tabBarLabel: 'حسابي',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons
+                name={focused ? TabIcons.account.active : TabIcons.account.inactive}
+                size={size ?? 22}
+                color={color}
+              />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+      <StoreClosedOverlay />
+    </>
   );
 }
 
 function MainTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.tabInactive,
-        tabBarLabelStyle: styles.tabLabel,
-      }}
-    >
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'الرئيسية',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="OffersTab"
-        component={OffersScreen}
-        options={{
-          tabBarLabel: 'الخصومات',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'pricetag' : 'pricetag-outline'} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="FavoritesTab"
-        component={FavoritesScreen}
-        options={{
-          tabBarLabel: 'المفضلة',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'heart' : 'heart-outline'} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AccountTab"
-        component={AccountScreen}
-        options={{
-          tabBarLabel: 'حسابي',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} />
-          ),
-        }}
-      />
-    </Tab.Navigator>
-  );
+  return <MainTabsInner />;
 }
 
 function AppNavigator() {
@@ -116,15 +135,12 @@ function AppNavigator() {
 
   if (isCheckingAuth) {
     return (
-      <LinearGradient
-        colors={['#FFFEFE', '#FFF5F5', '#FFFFFF']}
-        style={styles.splash}
-      >
+      <View style={styles.splash}>
         <View style={[styles.splashBlob, styles.splashBlobTop]} />
         <RedAppleLogo size={96} />
         <Text style={styles.splashText}>متجر تفاحة</Text>
         <Text style={styles.splashSub}>تسوق طازج بكل سهولة</Text>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -135,6 +151,7 @@ function AppNavigator() {
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="SubCategories" component={SubCategoriesScreen} />
           <Stack.Screen name="CategoryProducts" component={CategoryProductsScreen} />
           <Stack.Screen name="Cart" component={CartScreen} />
           <Stack.Screen
@@ -145,6 +162,14 @@ function AppNavigator() {
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
           <Stack.Screen name="AboutApp" component={AboutAppScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Favorites" component={FavoritesScreen} />
+          <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
+          <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
+          <Stack.Screen
+            name="OrderThankYou"
+            component={OrderThankYouScreen}
+            options={{ gestureEnabled: false }}
+          />
         </>
       )}
     </Stack.Navigator>
@@ -160,6 +185,7 @@ export default function App() {
             <AppNavigator />
           </NavigationContainer>
           <Toast />
+          <OfflineOverlay />
         </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -169,36 +195,17 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   tabBar: {
-    position: 'absolute',
-    height: Layout.tabBarHeight,
-    paddingBottom: 10,
-    paddingTop: 10,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    elevation: 12,
-    shadowColor: '#1A2A1C',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    paddingTop: 6,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 2,
-  },
-  tabIcon: {
-    width: 40,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIconActive: {
-    width: 44,
-    height: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: -2,
   },
   splash: {
     flex: 1,
@@ -206,6 +213,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     overflow: 'hidden',
+    backgroundColor: Colors.background,
   },
   splashBlob: {
     position: 'absolute',
