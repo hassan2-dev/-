@@ -1,4 +1,6 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import { makeRedirectUri } from 'expo-auth-session';
 
 /**
  * Web Client ID من Firebase:
@@ -21,6 +23,41 @@ export const EXPO_AUTH_PROXY_REDIRECT_URI =
   Constants.expoConfig?.owner && Constants.expoConfig?.slug
     ? `https://auth.expo.io/@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
     : '';
+
+/** iOS/Android native: com.googleusercontent.apps.{clientId}:/oauthredirect */
+export function googleClientIdToRedirectUri(clientId: string): string {
+  const stripped = clientId.replace(/\.apps\.googleusercontent\.com$/i, '');
+  return `com.googleusercontent.apps.${stripped}:/oauthredirect`;
+}
+
+export function getGoogleOAuthRedirectUri(clientId: string, expoGo: boolean): string {
+  if (expoGo && EXPO_AUTH_PROXY_REDIRECT_URI) {
+    return EXPO_AUTH_PROXY_REDIRECT_URI;
+  }
+
+  // iOS OAuth client يتطلب reversed client ID — ليس tofahastore://
+  if (Platform.OS === 'ios') {
+    return googleClientIdToRedirectUri(clientId);
+  }
+
+  // Android: عميل مخصص → reversed scheme؛ Web client → scheme التطبيق
+  if (Platform.OS === 'android') {
+    const usesDedicatedAndroidClient =
+      Boolean(GOOGLE_ANDROID_CLIENT_ID) && clientId === GOOGLE_ANDROID_CLIENT_ID;
+    if (usesDedicatedAndroidClient) {
+      return googleClientIdToRedirectUri(clientId);
+    }
+    return makeRedirectUri({
+      scheme: (Constants.expoConfig?.scheme as string | undefined) ?? 'tofahastore',
+      path: 'oauthredirect',
+    });
+  }
+
+  return makeRedirectUri({
+    scheme: (Constants.expoConfig?.scheme as string | undefined) ?? 'tofahastore',
+    path: 'oauthredirect',
+  });
+}
 
 export function hasGoogleAuthConfig(): boolean {
   return Boolean(GOOGLE_WEB_CLIENT_ID);

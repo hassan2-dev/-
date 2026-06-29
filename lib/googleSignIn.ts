@@ -6,7 +6,6 @@ import {
   AccessTokenRequest,
   AuthRequest,
   loadAsync,
-  makeRedirectUri,
   ResponseType,
 } from 'expo-auth-session';
 import { generateHexStringAsync } from 'expo-auth-session/build/PKCE';
@@ -17,6 +16,7 @@ import {
   GOOGLE_ANDROID_CLIENT_ID,
   GOOGLE_IOS_CLIENT_ID,
   GOOGLE_WEB_CLIENT_ID,
+  getGoogleOAuthRedirectUri,
 } from './authConfig';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -131,13 +131,7 @@ async function buildGoogleSession(): Promise<PreparedGoogleSession> {
     throw new Error('missing_client');
   }
 
-  const oauthRedirectUri =
-    expoGo && EXPO_AUTH_PROXY_REDIRECT_URI
-      ? EXPO_AUTH_PROXY_REDIRECT_URI
-      : makeRedirectUri({
-          scheme: (Constants.expoConfig?.scheme as string | undefined) ?? 'tofahastore',
-          path: 'oauthredirect',
-        });
+  const oauthRedirectUri = getGoogleOAuthRedirectUri(clientId, expoGo);
 
   const extraParams: Record<string, string> = { prompt: 'select_account' };
   if (expoGo) {
