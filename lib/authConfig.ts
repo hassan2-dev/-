@@ -22,18 +22,16 @@ export const EXPO_AUTH_PROXY_REDIRECT_URI =
     ? `https://auth.expo.io/@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
     : '';
 
-/** iOS/Android native: com.googleusercontent.apps.{clientId}:/oauthredirect */
+/** Native builds: reversed scheme من Web Client (معتمد من Google للتطبيقات) */
 export function googleClientIdToRedirectUri(clientId: string): string {
   const stripped = clientId.replace(/\.apps\.googleusercontent\.com$/i, '');
-  return `com.googleusercontent.apps.${stripped}:/oauthredirect`;
+  return `com.googleusercontent.apps.${stripped}:/oauth2redirect/google`;
 }
 
 export function getGoogleOAuthRedirectUri(clientId: string, expoGo: boolean): string {
   if (expoGo && EXPO_AUTH_PROXY_REDIRECT_URI) {
     return EXPO_AUTH_PROXY_REDIRECT_URI;
   }
-
-  // Native (TestFlight / APK): reversed client ID — لا تضف tofahastore:// في Google Console
   return googleClientIdToRedirectUri(clientId);
 }
 
@@ -41,6 +39,10 @@ export function getGoogleReversedClientScheme(clientId: string): string {
   const stripped = clientId.replace(/\.apps\.googleusercontent\.com$/i, '');
   return `com.googleusercontent.apps.${stripped}`;
 }
+
+export const GOOGLE_NATIVE_URL_SCHEME = GOOGLE_WEB_CLIENT_ID
+  ? getGoogleReversedClientScheme(GOOGLE_WEB_CLIENT_ID)
+  : '';
 
 export function hasGoogleAuthConfig(): boolean {
   return Boolean(GOOGLE_WEB_CLIENT_ID);

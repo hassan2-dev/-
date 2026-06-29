@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -13,8 +12,6 @@ import { discovery } from 'expo-auth-session/providers/google';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import {
   EXPO_AUTH_PROXY_REDIRECT_URI,
-  GOOGLE_ANDROID_CLIENT_ID,
-  GOOGLE_IOS_CLIENT_ID,
   GOOGLE_WEB_CLIENT_ID,
   getGoogleOAuthRedirectUri,
 } from './authConfig';
@@ -31,16 +28,6 @@ function logGoogle(step: string, detail?: unknown) {
   if (__DEV__) {
     console.log(`[Google Sign-In] ${step}`, detail ?? '');
   }
-}
-
-function getGoogleClientId(): string {
-  return (
-    Platform.select({
-      ios: GOOGLE_IOS_CLIENT_ID,
-      android: GOOGLE_ANDROID_CLIENT_ID,
-      default: GOOGLE_WEB_CLIENT_ID,
-    }) || GOOGLE_WEB_CLIENT_ID
-  );
 }
 
 function getProjectFullName(): string {
@@ -126,17 +113,18 @@ type PreparedGoogleSession = {
 
 async function buildGoogleSession(): Promise<PreparedGoogleSession> {
   const expoGo = isExpoGo();
-  const clientId = expoGo ? GOOGLE_WEB_CLIENT_ID : getGoogleClientId();
+  // المتصفح في Expo Go و TestFlight يستخدم Web Client + id_token
+  const clientId = GOOGLE_WEB_CLIENT_ID;
   if (!clientId) {
     throw new Error('missing_client');
   }
 
   const oauthRedirectUri = getGoogleOAuthRedirectUri(clientId, expoGo);
 
-  const extraParams: Record<string, string> = { prompt: 'select_account' };
-  if (expoGo) {
-    extraParams.nonce = await generateHexStringAsync(16);
-  }
+  const extraParams: Record<string, string> = {
+    prompt: 'select_account',
+    nonce: await generateHexStringAsync(16),
+  };
 
   const request = await loadAsync(
     {
@@ -144,8 +132,8 @@ async function buildGoogleSession(): Promise<PreparedGoogleSession> {
       redirectUri: oauthRedirectUri,
       scopes: GOOGLE_SCOPES,
       extraParams,
-      usePKCE: !expoGo,
-      responseType: expoGo ? ResponseType.IdToken : ResponseType.Code,
+      usePKCE: false,
+      responseType: ResponseType.IdToken,
     },
     discovery
   );
@@ -175,7 +163,7 @@ async function finishGoogleSignIn(session: PreparedGoogleSession): Promise<Googl
     oauthRedirectUri,
     browserReturnUrl,
     clientId: clientId.slice(0, 12) + '...',
-    flow: expoGo ? 'id_token+proxy' : 'code+pkce',
+    flow: expoGo ? 'id_token+proxy' : 'id_token+native',
   });
 
   logGoogle('opening browser', { startUrl: startUrl.slice(0, 80) + '...', browserReturnUrl });

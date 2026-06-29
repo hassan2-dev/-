@@ -32,6 +32,11 @@
           },
           {
             "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
               "com.googleusercontent.apps.662162908373-ceubra5lenh41osqic0odbt12tm4nksn"
             ]
           }
@@ -55,7 +60,7 @@
           "data": [
             {
               "scheme": "com.googleusercontent.apps.662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0",
-              "pathPrefix": "/oauthredirect"
+              "pathPrefix": "/oauth2redirect"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
