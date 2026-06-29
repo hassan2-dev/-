@@ -13,12 +13,13 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#EEF5FC"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tofahastore.app",
       "appleTeamId": "P486YA4QZB",
+      "icon": "./assets/icon.png",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleDisplayName": "متجر تفاحة",
@@ -44,7 +45,7 @@
       "permissions": ["POST_NOTIFICATIONS"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#EEF5FC"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
