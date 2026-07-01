@@ -3,7 +3,14 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken, getDocument } from '../lib/firebase';
 import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
-import { initPushNotifications, showLocalNotification, registerExpoPushToken, getPushPlatform, addNotificationListeners } from '../lib/pushNotifications';
+import {
+  preparePushNotifications,
+  getNotificationPermissionState,
+  showLocalNotification,
+  registerExpoPushToken,
+  getPushPlatform,
+  addNotificationListeners,
+} from '../lib/pushNotifications';
 import { getOrderStatusNotification } from '../lib/notificationMessages';
 import { Category, Product, CartItem, StoreSettings } from '../lib/types';
 import { normalizeProduct } from '../lib/productImage';
@@ -92,6 +99,7 @@ interface AppContextType {
   notificationsLoading: boolean;
   refreshNotifications: () => Promise<void>;
   markNotificationsRead: () => Promise<void>;
+  enablePushNotifications: () => Promise<boolean>;
 
   // Toast
   toasts: ToastMessage[];
@@ -474,6 +482,14 @@ export function AppProvider({ children }: { children: any }) {
     }
   }, [isLoggedIn, isGuest, userEmail, userPhone]);
 
+  const enablePushNotifications = useCallback(async () => {
+    if (!isLoggedIn || isGuest || (!userEmail && !userPhone)) return false;
+    const state = await getNotificationPermissionState();
+    if (state !== 'granted') return false;
+    await syncPushToken();
+    return true;
+  }, [isLoggedIn, isGuest, userEmail, userPhone, syncPushToken]);
+
   const addToCart = useCallback((product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -626,8 +642,12 @@ export function AppProvider({ children }: { children: any }) {
       setNotifications([]);
       return;
     }
-    initPushNotifications().catch(() => {});
-    syncPushToken().catch(() => {});
+    preparePushNotifications().catch(() => {});
+    getNotificationPermissionState()
+      .then((state) => {
+        if (state === 'granted') syncPushToken().catch(() => {});
+      })
+      .catch(() => {});
     refreshNotifications();
     const timer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
     return () => clearInterval(timer);
@@ -712,7 +732,7 @@ export function AppProvider({ children }: { children: any }) {
         submitOrder,
         storeSettings, isStoreOpen,
         notifications, unreadNotificationCount, notificationsLoading,
-        refreshNotifications, markNotificationsRead,
+        refreshNotifications, markNotificationsRead, enablePushNotifications,
         toasts, showToast,
       }}
     >
