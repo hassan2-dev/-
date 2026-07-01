@@ -1,9 +1,14 @@
 import React from 'react';
-import { Text, StyleSheet, ScrollView } from 'react-native';
+import { Text, StyleSheet, ScrollView, View } from 'react-native';
+import Constants from 'expo-constants';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, FontSize, Spacing, Layout } from '../lib/theme';
 import GlassBackground from '../components/GlassBackground';
 import { AppHeader } from '../components/layout';
+
+const appVersion = Constants.expoConfig?.version ?? '1.0.1';
+const buildNumber = Constants.nativeBuildVersion;
+const versionLabel = buildNumber ? `${appVersion} (${buildNumber})` : appVersion;
 
 export default function AboutAppScreen() {
   const navigation = useNavigation();
@@ -24,7 +29,7 @@ export default function AboutAppScreen() {
         <Text style={styles.bulletItem}>• المفضلة</Text>
         <Text style={styles.bulletItem}>• إرسال الطلبات</Text>
 
-        <Text style={styles.version}>الإصدار: 1.0.0</Text>
+        <Text style={styles.version}>الإصدار: {versionLabel}</Text>
 
         <View style={styles.divider} />
 
@@ -39,7 +44,7 @@ export default function AboutAppScreen() {
         <Text style={styles.bulletItemEn}>• Favorites</Text>
         <Text style={styles.bulletItemEn}>• Order submission</Text>
 
-        <Text style={styles.versionEn}>Version: 1.0.0</Text>
+        <Text style={styles.versionEn}>Version: {versionLabel}</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>
