@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, FontSize, Spacing, BorderRadius, getBottomSafeInset } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Layout, getBottomSafeInset } from '../lib/theme';
 import { useApp, AppNotification } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import { AppHeader } from '../components/layout';
