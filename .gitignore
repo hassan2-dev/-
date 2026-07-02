@@ -45,3 +45,6 @@ GoogleService-Info (*).plist
 /ios
 /android
 
+# Vercel
+.vercel
+

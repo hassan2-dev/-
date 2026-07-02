@@ -10,6 +10,8 @@
     "ios": "npx expo run:ios",
     "web": "npx expo start --web",
     "admin": "npx --yes serve admin-update -l 3456",
+    "deploy:admin": "npx vercel admin-update --prod",
+    "deploy:admin:preview": "npx vercel admin-update",
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
     "submit:ios": "eas submit --platform ios --latest --profile production",

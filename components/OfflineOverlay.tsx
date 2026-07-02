@@ -10,11 +10,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../lib/theme';
 import { useNetworkStatus } from '../lib/useNetworkStatus';
+import { useApp } from '../context/AppProvider';
 
 export default function OfflineOverlay() {
+  const { isLoggedIn, isCheckingAuth } = useApp();
   const { isOffline, checking, recheckConnection } = useNetworkStatus();
 
-  if (!isOffline) return null;
+  if (isCheckingAuth || !isLoggedIn || !isOffline) return null;
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent>

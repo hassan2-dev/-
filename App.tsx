@@ -12,6 +12,7 @@ import { TabIcons } from './components/AppIcon';
 import TabCartButton from './components/TabCartButton';
 import Toast from './components/Toast';
 import OfflineOverlay from './components/OfflineOverlay';
+import NotificationPermissionBanner from './components/NotificationPermissionBanner';
 import RedAppleLogo from './components/RedAppleLogo';
 
 import LoginScreen from './screens/LoginScreen';
@@ -185,6 +186,7 @@ export default function App() {
             <AppNavigator />
           </NavigationContainer>
           <Toast />
+          <NotificationPermissionBanner />
           <OfflineOverlay />
         </AppProvider>
       </SafeAreaProvider>

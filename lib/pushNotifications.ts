@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -13,9 +13,11 @@ Notifications.setNotificationHandler({
   }),
 });
 
-let initialized = false;
+let channelsReady = false;
 
 export type PushPlatform = 'ios' | 'android' | 'web';
+
+export type NotificationPermissionState = 'granted' | 'denied' | 'undetermined';
 
 export function getPushPlatform(): PushPlatform {
   if (Platform.OS === 'ios') return 'ios';
@@ -28,41 +30,96 @@ function getEasProjectId(): string | null {
   return typeof projectId === 'string' && projectId.trim() ? projectId.trim() : null;
 }
 
-export async function initPushNotifications(): Promise<boolean> {
-  if (initialized) return true;
-  if (Platform.OS !== 'web' && !Device.isDevice) return false;
+async function setupAndroidChannels(): Promise<void> {
+  if (Platform.OS !== 'android' || channelsReady) return;
+
+  await Notifications.setNotificationChannelAsync('orders', {
+    name: 'تحديثات الطلبات',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#3D9B4F',
+  });
+  await Notifications.setNotificationChannelAsync('general', {
+    name: 'إشعارات عامة',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    vibrationPattern: [0, 200, 200, 200],
+    lightColor: '#3D9B4F',
+  });
+  channelsReady = true;
+}
+
+export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
+  if (Platform.OS === 'web' || !Device.isDevice) return 'denied';
 
   try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let finalStatus = existing;
-    if (existing !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync({
-        ios: {
-          allowAlert: true,
-          allowBadge: true,
-          allowSound: true,
-        },
-      });
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return false;
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === 'granted') return 'granted';
+    if (status === 'denied') return 'denied';
+    return 'undetermined';
+  } catch {
+    return 'undetermined';
+  }
+}
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('orders', {
-        name: 'تحديثات الطلبات',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#3D9B4F',
-      });
-      await Notifications.setNotificationChannelAsync('general', {
-        name: 'إشعارات عامة',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 200, 200, 200],
-        lightColor: '#3D9B4F',
-      });
+/** يجهّز القنوات فقط — بدون طلب إذن من المستخدم */
+export async function preparePushNotifications(): Promise<void> {
+  if (Platform.OS === 'web' || !Device.isDevice) return;
+  try {
+    await setupAndroidChannels();
+  } catch {
+    // Expo Go قد لا يدعم كل الميزات
+  }
+}
+
+/** يطلب إذن الإشعارات عند ضغط المستخدم — لا يُستدعى تلقائياً بعد الدخول */
+export async function requestNotificationPermission(): Promise<{
+  granted: boolean;
+  needsSettings: boolean;
+}> {
+  if (Platform.OS === 'web' || !Device.isDevice) {
+    return { granted: false, needsSettings: true };
+  }
+
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === 'granted') {
+      await setupAndroidChannels();
+      return { granted: true, needsSettings: false };
     }
 
-    initialized = true;
+    if (current.status === 'denied' && current.canAskAgain === false) {
+      return { granted: false, needsSettings: true };
+    }
+
+    const { status, canAskAgain } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+
+    if (status === 'granted') {
+      await setupAndroidChannels();
+      return { granted: true, needsSettings: false };
+    }
+
+    return {
+      granted: false,
+      needsSettings: status === 'denied' && canAskAgain === false,
+    };
+  } catch {
+    return { granted: false, needsSettings: false };
+  }
+}
+
+export async function openAppNotificationSettings(): Promise<boolean> {
+  try {
+    if (Platform.OS === 'ios') {
+      await Linking.openURL('app-settings:');
+      return true;
+    }
+    await Linking.openSettings();
     return true;
   } catch {
     return false;
@@ -70,10 +127,12 @@ export async function initPushNotifications(): Promise<boolean> {
 }
 
 export async function registerExpoPushToken(): Promise<string | null> {
-  if (Platform.OS !== 'web' && !Device.isDevice) return null;
+  if (Platform.OS === 'web' || !Device.isDevice) return null;
 
-  const ready = await initPushNotifications();
-  if (!ready) return null;
+  const state = await getNotificationPermissionState();
+  if (state !== 'granted') return null;
+
+  await setupAndroidChannels();
 
   const projectId = getEasProjectId();
   if (!projectId) {
@@ -99,8 +158,11 @@ export async function showLocalNotification(
   body: string,
   data?: Record<string, string>
 ): Promise<void> {
+  const state = await getNotificationPermissionState();
+  if (state !== 'granted') return;
+
   try {
-    await initPushNotifications();
+    await setupAndroidChannels();
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -112,7 +174,7 @@ export async function showLocalNotification(
       trigger: null,
     });
   } catch {
-    // Expo Go قد لا يدعم كل ميزات الإشعارات
+    // تجاهل — قد تكون الإشعارات معطّلة
   }
 }
 
