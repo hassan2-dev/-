@@ -51,9 +51,10 @@ export async function initAdminFcm(app, db, handlers = {}) {
       return { ok: false, reason: 'denied' };
     }
 
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-      scope: '/',
-    });
+    const registration = await navigator.serviceWorker.register(
+      new URL('./firebase-messaging-sw.js', window.location.href).href,
+      { scope: '/' }
+    );
     await navigator.serviceWorker.ready;
 
     messagingInstance = getMessaging(app);
@@ -67,6 +68,7 @@ export async function initAdminFcm(app, db, handlers = {}) {
     }
 
     await saveAdminFcmToken(db, token);
+    console.log('[FCM] admin token saved');
 
     onMessage(messagingInstance, (payload) => {
       const title = payload.notification?.title || 'تفاحة';
@@ -79,6 +81,7 @@ export async function initAdminFcm(app, db, handlers = {}) {
     return { ok: true, tokenPreview: token.slice(0, 24) + '...' };
   } catch (error) {
     console.error('[FCM] init failed', error);
+    fcmReady = false;
     return { ok: false, reason: 'error', detail: error?.message || String(error) };
   }
 }

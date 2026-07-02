@@ -447,6 +447,14 @@ let ordersUnsubscribe = null;
 let ordersAlertsReady = false;
 const ordersState = new Map();
 const locallyUpdatedOrders = new Set();
+const recentOrderAlerts = new Set();
+
+function alertOrderOnce(key, fn) {
+    if (recentOrderAlerts.has(key)) return;
+    recentOrderAlerts.add(key);
+    setTimeout(() => recentOrderAlerts.delete(key), 8000);
+    fn();
+}
 
 function updatePendingBadgeFromCount(count) {
     const badge = document.getElementById('pending-orders-badge');
@@ -470,13 +478,12 @@ function updateBrowserNotifButton() {
 async function setupAdminPushNotifications() {
     const result = await initAdminFcm(app, db, {
         onForegroundMessage: ({ title, body, type, data }) => {
-            showAdminToast(title, body, type);
-            playAdminAlertSound();
-            if (data?.type === 'new_order') {
+            const key = data?.orderId ? `fcm-${data.orderId}-${data.type || type}` : `fcm-${Date.now()}`;
+            alertOrderOnce(key, () => {
+                showAdminToast(title, body, type);
+                playAdminAlertSound();
                 refreshVisibleOrdersTab();
-            } else if (data?.type === 'order_update') {
-                refreshVisibleOrdersTab();
-            }
+            });
         },
     });
 
@@ -491,7 +498,7 @@ function updateFcmStatusBanner(result) {
 
     if (result?.ok) {
         el.className = 'fcm-status-banner success';
-        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> إشعارات Firebase مفعّلة — تصل حتى مع إغلاق المتصفح';
+        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> إشعارات Firebase مفعّلة — داخل اللوحة فورية، وللخلفية انشر Cloud Functions: <code>npm run deploy:functions</code>';
         return;
     }
 
@@ -632,20 +639,24 @@ function startOrderRealtimeAlerts() {
             const customerName = data.name || 'زبون';
             const total = `${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع`;
 
-            if (change.type === 'added' && status === 'pending' && !isAdminFcmReady()) {
-                showAdminBrowserNotification({
-                    title: '📦 طلب جديد',
-                    body: `${customerName} — ${total}`,
-                    tabId: 'orders',
+            if (change.type === 'added' && status === 'pending') {
+                alertOrderOnce(`snap-new-${id}`, () => {
+                    showAdminBrowserNotification({
+                        title: '📦 طلب جديد',
+                        body: `${customerName} — ${total}`,
+                        tabId: 'orders',
+                    });
                 });
                 shouldRefresh = true;
             } else if (change.type === 'modified') {
                 const prevStatus = ordersState.get(id);
-                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id) && !isAdminFcmReady()) {
-                    showAdminBrowserNotification({
-                        title: '🔄 تحديث طلب',
-                        body: `${customerName}: ${getOrderStatusLabel(prevStatus)} → ${getOrderStatusLabel(status)}`,
-                        tabId: status === 'pending' ? 'orders' : 'accepted-orders',
+                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id)) {
+                    alertOrderOnce(`snap-upd-${id}-${status}`, () => {
+                        showAdminBrowserNotification({
+                            title: '🔄 تحديث طلب',
+                            body: `${customerName}: ${getOrderStatusLabel(prevStatus)} → ${getOrderStatusLabel(status)}`,
+                            tabId: status === 'pending' ? 'orders' : 'accepted-orders',
+                        });
                     });
                     shouldRefresh = true;
                 }
@@ -662,7 +673,8 @@ function startOrderRealtimeAlerts() {
 
         if (shouldRefresh) refreshVisibleOrdersTab();
     }, (error) => {
-        console.warn('orders listener failed', error);
+        console.error('orders listener failed', error);
+        showCustomAlert('تعذر الاتصال بمتابعة الطلبات — تحقق من الإنترنت');
     });
 }
 
