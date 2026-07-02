@@ -89,7 +89,7 @@
       "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
       "googleIosClientId": "662162908373-ceubra5lenh41osqic0odbt12tm4nksn.apps.googleusercontent.com",
       "googleAndroidClientId": "662162908373-gnpct2t5j9oo074h2k8he7qnh5v6ac0i.apps.googleusercontent.com",
-      "adminNotifyUrl": "",
+      "adminNotifyUrl": "https://tufaha-admin.vercel.app/api/notify-order",
       "adminNotifySecret": "tufaha_notify_7f3a9c2e"
     }
   }

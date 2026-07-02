@@ -19,4 +19,4 @@ export const WEB_PUSH_VAPID_PUBLIC_KEY =
 export const ADMIN_NOTIFY_SECRET = 'tufaha_notify_7f3a9c2e';
 
 /** يُحدَّد تلقائياً من عنوان الداشبورد — أو ضعه يدوياً في app.json للتطبيق */
-export const ADMIN_NOTIFY_URL = '';
+export const ADMIN_NOTIFY_URL = 'https://tufaha-admin.vercel.app/api/notify-order';
