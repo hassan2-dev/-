@@ -4,6 +4,12 @@ const PROJECT_ID = 'basjfk-58536';
 const FIRESTORE_API = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyAPiiVfmJdGHje0gittK-7yFTYNTQNY6Fk';
 
+function sendJson(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+}
+
 async function fetchPushSubscriptions() {
   const response = await fetch(`${FIRESTORE_API}/admin_push_subscriptions?key=${FIREBASE_API_KEY}`);
   if (!response.ok) {
@@ -26,33 +32,51 @@ async function fetchPushSubscriptions() {
     .filter(Boolean);
 }
 
-module.exports = async (req, res) => {
+async function handler(req, res) {
+  const method = String(req.method || 'GET').toUpperCase();
+
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-notify-secret');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+  if (method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'method_not_allowed' });
+  if (method === 'GET') {
+    return sendJson(res, 200, {
+      ok: true,
+      message: 'notify-order API is live — use POST with JSON body and x-notify-secret header',
+    });
+  }
+
+  if (method !== 'POST') {
+    return sendJson(res, 405, { ok: false, error: 'method_not_allowed', method });
   }
 
   const secret = req.headers['x-notify-secret'];
   if (!process.env.ADMIN_NOTIFY_SECRET || secret !== process.env.ADMIN_NOTIFY_SECRET) {
-    return res.status(401).json({ ok: false, error: 'unauthorized' });
+    return sendJson(res, 401, { ok: false, error: 'unauthorized' });
   }
 
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   if (!publicKey || !privateKey) {
-    return res.status(500).json({ ok: false, error: 'missing_vapid_env' });
+    return sendJson(res, 500, { ok: false, error: 'missing_vapid_env' });
   }
 
   webpush.setVapidDetails('mailto:admin@tofahastore.app', publicKey, privateKey);
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
+
   const title = body.title || '📦 طلب جديد';
   const text = body.body || '';
   const data = body.data || {};
@@ -60,7 +84,7 @@ module.exports = async (req, res) => {
   try {
     const subscriptions = await fetchPushSubscriptions();
     if (!subscriptions.length) {
-      return res.json({ ok: true, sent: 0, message: 'no_subscriptions' });
+      return sendJson(res, 200, { ok: true, sent: 0, message: 'no_subscriptions' });
     }
 
     const payload = JSON.stringify({
@@ -83,9 +107,12 @@ module.exports = async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, sent, failed });
+    return sendJson(res, 200, { ok: true, sent, failed });
   } catch (error) {
     console.error('[notify-order]', error);
-    return res.status(500).json({ ok: false, error: error?.message || 'notify_failed' });
+    return sendJson(res, 500, { ok: false, error: error?.message || 'notify_failed' });
   }
-};
+}
+
+module.exports = handler;
+module.exports.default = handler;

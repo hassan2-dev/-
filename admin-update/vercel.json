@@ -2,7 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "name": "tufaha-admin",
-  "cleanUrls": true,
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 15
+    }
+  },
   "headers": [
     {
       "source": "/push-sw.js",

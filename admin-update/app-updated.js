@@ -540,8 +540,14 @@ function describeNotifyApiFailure(result) {
     if (String(result?.error || '').includes('firestore_list_failed')) {
         return 'Firebase ما يسمح بقراءة الاشتراكات — انشر firestore.rules';
     }
+    if (result?.error === 'method_not_allowed') {
+        return 'الطلب وصل GET بدل POST — انشر آخر تحديث: npm run deploy:admin';
+    }
     if (result?.httpStatus === 404) {
         return 'API غير موجود — تأكد من نشر admin-update على Vercel';
+    }
+    if (result?.httpStatus === 405) {
+        return 'الطلب وصل بطريقة خاطئة — انشر آخر تحديث على Vercel';
     }
     return result?.error || 'تحقق من إعدادات Vercel';
 }
