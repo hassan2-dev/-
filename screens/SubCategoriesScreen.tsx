@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Layout, Spacing, FontSize } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, Layout, Spacing, FontSize, getBottomSafeInset } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import { getSubCategories } from '../lib/categories';
 import GlassBackground from '../components/GlassBackground';
@@ -12,6 +13,8 @@ import { AppHeader, SectionHeader } from '../components/layout';
 
 export default function SubCategoriesScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = getBottomSafeInset(insets.bottom) + Spacing.lg;
   const route = useRoute<any>();
   const { parentId, parentName } = route.params;
   const { categories, products } = useApp();
@@ -37,7 +40,7 @@ export default function SubCategoriesScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {subCategories.length > 0 ? (
@@ -78,7 +81,6 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
   block: { marginBottom: Spacing.lg },
   empty: {

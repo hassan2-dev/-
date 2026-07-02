@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Layout, Spacing } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Layout, Spacing, getTabBarBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import PaginatedProductGrid from '../components/PaginatedProductGrid';
@@ -9,6 +10,8 @@ import { AppHeader, EmptyState } from '../components/layout';
 
 export default function OffersScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const tabBottomPadding = getTabBarBottomPadding(insets.bottom);
   const { products } = useApp();
   const discountedProducts = products.filter((p) => p.hasDiscount);
 
@@ -22,7 +25,7 @@ export default function OffersScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {discountedProducts.length === 0 ? (
@@ -51,6 +54,5 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
 });

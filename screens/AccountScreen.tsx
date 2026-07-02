@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Colors,
   FontSize,
@@ -18,6 +19,7 @@ import {
   WHATSAPP_NUMBER,
   Layout,
   Shadow,
+  getTabBarBottomPadding,
 } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
@@ -43,6 +45,8 @@ type MenuItem = {
 
 export default function AccountScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const tabBottomPadding = getTabBarBottomPadding(insets.bottom);
   const {
     logout,
     showToast,
@@ -190,7 +194,7 @@ export default function AccountScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileCard}>
@@ -249,7 +253,6 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
   profileCard: {
     backgroundColor: Colors.surface,

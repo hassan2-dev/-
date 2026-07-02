@@ -9,7 +9,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, BorderRadius, FontSize, Spacing } from '../lib/theme';
+import { Colors, BorderRadius, FontSize, Spacing, getFooterBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import AppBrandLogo from '../components/AppBrandLogo';
@@ -61,7 +61,7 @@ export default function LoginScreen() {
 
   return (
     <GlassBackground>
-      <View style={[styles.container, { paddingTop: insets.top + 80 }]}>
+      <View style={[styles.container, { paddingTop: insets.top + 80, paddingBottom: getFooterBottomPadding(insets.bottom, { extra: Spacing.xl }) }]}>
         <View style={styles.logoSpacer}>
           <AppBrandLogo size={120} />
         </View>

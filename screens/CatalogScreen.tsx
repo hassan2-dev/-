@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, ScrollView, View, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Layout, Spacing } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Layout, Spacing, getTabBarBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import SearchBarWithResults from '../components/SearchBarWithResults';
@@ -11,6 +12,8 @@ import { SectionHeader } from '../components/layout';
 
 export default function CatalogScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const tabBottomPadding = getTabBarBottomPadding(insets.bottom, Spacing.xl);
   const { products } = useApp();
   const [search, setSearch] = useState('');
   const isSearchOpen = search.trim().length > 0;
@@ -43,7 +46,7 @@ export default function CatalogScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!isSearchOpen}
@@ -79,6 +82,5 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.sm,
-    paddingBottom: Layout.tabBarHeight + Spacing.xl,
   },
 });

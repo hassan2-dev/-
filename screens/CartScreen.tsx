@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Keyboa
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Layout, getFooterBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import { fetchCollection } from '../lib/firebase';
 import { isValidIraqiPhone, normalizeIraqiPhone } from '../lib/phone';
@@ -60,6 +60,9 @@ export default function CartScreen({ mode = 'stack' }: Props) {
   const [latestOrders, setLatestOrders] = useState<any[]>([]);
   const [hiddenOrderIds, setHiddenOrderIds] = useState<string[]>([]);
 
+  const footerBottomPadding = getFooterBottomPadding(insets.bottom, {
+    includeTabBar: mode === 'tab',
+  });
   const cartCount = getCartCount();
   const totals = getCartTotals();
   const isPhoneValid = isValidIraqiPhone(phone);
@@ -318,7 +321,10 @@ export default function CartScreen({ mode = 'stack' }: Props) {
         {showCheckout ? (
           <ScrollView
             style={styles.content}
-            contentContainerStyle={styles.checkoutScrollContent}
+            contentContainerStyle={[
+              styles.checkoutScrollContent,
+              { paddingBottom: footerBottomPadding + Spacing.xl },
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -475,10 +481,10 @@ export default function CartScreen({ mode = 'stack' }: Props) {
                   </View>
                 ))
               )}
-              <View style={{ height: 280 }} />
+              <View style={{ height: 280 + (mode === 'tab' ? Layout.tabBarHeight : 0) }} />
             </ScrollView>
 
-            <View style={[styles.summary, { paddingBottom: insets.bottom + Spacing.md }]}>
+            <View style={[styles.summary, { paddingBottom: footerBottomPadding }]}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>الطلبات</Text>
                 <Text style={styles.summaryValue}>{totals.subtotal.toLocaleString()} د.ع</Text>

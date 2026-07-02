@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, FontSize, Spacing, BorderRadius, Layout } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, getBottomSafeInset } from '../lib/theme';
 import { useApp, AppNotification } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import { AppHeader } from '../components/layout';
@@ -96,7 +96,7 @@ export default function NotificationsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + Layout.tabBarHeight + Spacing.lg },
+          { paddingBottom: getBottomSafeInset(insets.bottom) + Spacing.lg },
           notifications.length === 0 && styles.listEmpty,
         ]}
         refreshControl={

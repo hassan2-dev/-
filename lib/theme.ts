@@ -98,6 +98,28 @@ export const Layout = {
   homeHeaderContentGap: Spacing.xl,
 };
 
+/** Bottom inset for system nav bar / home indicator (edge-to-edge Android). */
+export function getBottomSafeInset(bottom: number): number {
+  if (Platform.OS === 'ios') {
+    return Math.max(bottom - 4, 0);
+  }
+  return Math.max(bottom, 12);
+}
+
+/** Scroll padding on tab screens so content clears tab bar + system bar. */
+export function getTabBarBottomPadding(bottom: number, extra: number = Spacing.lg): number {
+  return Layout.tabBarHeight + getBottomSafeInset(bottom) + extra;
+}
+
+/** Padding for fixed footers (cart pay bar, login, modals). */
+export function getFooterBottomPadding(
+  bottom: number,
+  options: { includeTabBar?: boolean; extra?: number } = {},
+): number {
+  const { includeTabBar = false, extra = Spacing.md } = options;
+  return getBottomSafeInset(bottom) + (includeTabBar ? Layout.tabBarHeight : 0) + extra;
+}
+
 export const DELIVERY_COST = 1000;
 export const WHATSAPP_NUMBER = '7744181839';
 export const BACKGROUND_IMAGE =

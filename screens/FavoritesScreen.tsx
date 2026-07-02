@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Layout, Spacing } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Layout, Spacing, getBottomSafeInset } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import PaginatedProductGrid from '../components/PaginatedProductGrid';
@@ -9,6 +10,8 @@ import { AppHeader, EmptyState } from '../components/layout';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = getBottomSafeInset(insets.bottom) + Spacing.lg;
   const { products, favorites } = useApp();
   const favProducts = products.filter((p) => favorites.includes(p.id));
 
@@ -18,7 +21,7 @@ export default function FavoritesScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {favProducts.length === 0 ? (
@@ -46,6 +49,5 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
 });

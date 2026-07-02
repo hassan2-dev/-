@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import GlassBackground from '../components/GlassBackground';
 import AppBrandLogo from '../components/AppBrandLogo';
-import { Colors, FontSize, Spacing, BorderRadius } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, getBottomSafeInset } from '../lib/theme';
 
 type RouteParams = {
   scheduledLabel?: string;
@@ -26,7 +26,7 @@ export default function OrderThankYouScreen() {
 
   return (
     <GlassBackground>
-      <View style={[styles.container, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + Spacing.xl }]}>
+      <View style={[styles.container, { paddingTop: insets.top + 60, paddingBottom: getBottomSafeInset(insets.bottom) + Spacing.xl }]}>
         <AppBrandLogo size={120} />
 
         <View style={styles.messageBlock}>

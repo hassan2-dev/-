@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Colors, FontSize, Spacing, Layout } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, FontSize, Spacing, Layout, getTabBarBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import ScreenHeader from '../components/ScreenHeader';
@@ -25,6 +26,8 @@ import { SectionHeader } from '../components/layout';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const tabBottomPadding = getTabBarBottomPadding(insets.bottom);
   const { categories, products, banners, dataLoading, refreshData, userEmail, userDisplayName } =
     useApp();
   const [search, setSearch] = useState('');
@@ -76,7 +79,7 @@ export default function HomeScreen() {
       ) : (
         <ScrollView
           style={styles.content}
-          contentContainerStyle={styles.contentInner}
+          contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           scrollEnabled={!isSearchOpen}
@@ -131,7 +134,6 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
   loadingContainer: {
     flex: 1,

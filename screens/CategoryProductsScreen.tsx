@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Colors, Layout, Spacing } from '../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, Layout, Spacing, getBottomSafeInset } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import GlassBackground from '../components/GlassBackground';
 import SearchBarWithResults from '../components/SearchBarWithResults';
@@ -10,6 +11,8 @@ import { AppHeader, SectionHeader } from '../components/layout';
 
 export default function CategoryProductsScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = getBottomSafeInset(insets.bottom) + Spacing.lg;
   const route = useRoute<any>();
   const { categoryName } = route.params;
   const { products } = useApp();
@@ -54,7 +57,7 @@ export default function CategoryProductsScreen() {
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!isSearchOpen}
@@ -90,6 +93,5 @@ const styles = StyleSheet.create({
   content: { flex: 1, zIndex: 0 },
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
-    paddingBottom: Layout.tabBarHeight + Spacing.lg,
   },
 });

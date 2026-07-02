@@ -7,7 +7,7 @@ import GlassBackground from '../components/GlassBackground';
 import { AppHeader } from '../components/layout';
 import FormSection from '../components/FormSection';
 import ApartmentAddressPicker from '../components/ApartmentAddressPicker';
-import { Colors, FontSize, Spacing, BorderRadius, Layout } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Layout, getFooterBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import {
   ApartmentSelection,
@@ -100,7 +100,7 @@ export default function DeliveryAddressScreen() {
         </FormSection>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
+      <View style={[styles.footer, { paddingBottom: getFooterBottomPadding(insets.bottom, { extra: Spacing.lg }) }]}>
         {previewCode ? (
           <View style={styles.preview}>
             <View style={styles.previewRow}>

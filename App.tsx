@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, Platform } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,7 +7,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppProvider, useApp } from './context/AppProvider';
-import { Colors, FontSize, Layout } from './lib/theme';
+import { Colors, FontSize, Layout, getBottomSafeInset } from './lib/theme';
 import { TabIcons } from './components/AppIcon';
 import TabCartButton from './components/TabCartButton';
 import Toast from './components/Toast';
@@ -40,7 +40,7 @@ const Tab = createBottomTabNavigator();
 
 function MainTabsInner() {
   const insets = useSafeAreaInsets();
-  const bottomInset = Platform.OS === 'ios' ? Math.max(insets.bottom - 4, 0) : 4;
+  const bottomInset = getBottomSafeInset(insets.bottom);
 
   return (
     <>

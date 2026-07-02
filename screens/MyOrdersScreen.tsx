@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import GlassBackground from '../components/GlassBackground';
 import { AppHeader, EmptyState } from '../components/layout';
-import { Colors, FontSize, Spacing, BorderRadius, Layout } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Layout, getBottomSafeInset } from '../lib/theme';
 import { ORDER_STATUS_LABELS } from '../lib/notificationMessages';
 import { fetchCustomerOrders, formatOrderDateTime } from '../lib/customerOrders';
 import {
@@ -136,7 +136,7 @@ export default function MyOrdersScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + Spacing.xl },
+          { paddingBottom: getBottomSafeInset(insets.bottom) + Spacing.xl },
           orders.length === 0 && styles.listEmpty,
         ]}
         refreshControl={

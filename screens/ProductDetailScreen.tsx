@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, getBottomSafeInset } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 
 const { width } = Dimensions.get('window');
@@ -47,7 +47,7 @@ export default function ProductDetailScreen() {
         activeOpacity={1}
         onPress={() => navigation.goBack()}
       />
-      <View style={[styles.sheet, { marginBottom: insets.bottom + 16 }]}>
+      <View style={[styles.sheet, { marginBottom: getBottomSafeInset(insets.bottom) + Spacing.lg }]}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={22} color={Colors.textDark} />
         </TouchableOpacity>

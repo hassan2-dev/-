@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, FontSize, Spacing, BorderRadius } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, getBottomSafeInset } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
 import {
   getNotificationPermissionState,
@@ -115,7 +115,7 @@ export default function NotificationPermissionBanner() {
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent>
       <Pressable style={styles.overlay}>
-        <Pressable style={[styles.card, { marginBottom: insets.bottom + Spacing.md }]} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={[styles.card, { marginBottom: getBottomSafeInset(insets.bottom) + Spacing.md }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.iconWrap}>
             <Ionicons name="notifications-outline" size={32} color={Colors.primary} />
           </View>
