@@ -539,6 +539,27 @@ window.requestAdminBrowserNotifications = async () => {
     showCustomAlert(result.detail || 'تعذر تفعيل الإشعارات');
 };
 
+window.testAdminWebPush = async () => {
+    if (!isWebPushReady()) {
+        showCustomAlert('فعّل Web Push أولاً من الزر أعلاه');
+        return;
+    }
+    const result = await sendAdminPushNotify({
+        title: '🔔 اختبار Web Push',
+        body: 'إذا وصلك هذا — الإشعارات شغّالة ✅',
+        data: { type: 'test' },
+    });
+    if (result?.sent > 0) {
+        showAdminToast('تم الإرسال', `وصل لـ ${result.sent} جهاز — أغلق التطبيق وجرب مرة ثانية`, 'new');
+        return;
+    }
+    if (result?.message === 'no_subscriptions') {
+        showCustomAlert('ماكو اشتراك مسجّل — اضغط تفعيل Web Push مرة ثانية');
+        return;
+    }
+    showCustomAlert('تعذر الإرسال — تأكد من نشر Vercel مع مفاتيح VAPID');
+};
+
 window.setupAdminFcmLegacy = async () => {
     const result = await initAdminFcm(app, db, {
         onForegroundMessage: ({ title, body, type }) => {
@@ -1255,7 +1276,8 @@ window.loadPushTokenStats = async () => {
 
     try {
         const snap = await getDocs(collection(db, 'push_tokens'));
-        const counts = { ios: 0, android: 0, web: 0, total: 0 };
+        const adminPushSnap = await getDocs(collection(db, 'admin_push_subscriptions'));
+        const counts = { ios: 0, android: 0, web: 0, total: 0, adminWebPush: adminPushSnap.size };
         snap.forEach((docSnap) => {
             const platform = docSnap.data()?.platform || 'unknown';
             counts.total += 1;
@@ -1268,10 +1290,10 @@ window.loadPushTokenStats = async () => {
             <div class="sales-card card-3d" style="margin-bottom:1rem">
                 <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة مسجّلة للإشعارات</h3>
                 <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;margin-top:1rem">
-                    <div><strong>${counts.total}</strong><div class="order-meta">الإجمالي</div></div>
+                    <div><strong>${counts.total}</strong><div class="order-meta">زبائن (إجمالي)</div></div>
+                    <div><strong>${counts.adminWebPush}</strong><div class="order-meta">أدمن Web Push</div></div>
                     <div><strong>${counts.android}</strong><div class="order-meta">أندرويد</div></div>
                     <div><strong>${counts.ios}</strong><div class="order-meta">آيفون</div></div>
-                    <div><strong>${counts.web}</strong><div class="order-meta">ويب</div></div>
                 </div>
             </div>`;
     } catch (e) {

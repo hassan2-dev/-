@@ -210,12 +210,14 @@ async function finishGoogleSignIn(session: PreparedGoogleSession): Promise<Googl
 
   const parsed = request.parseReturnUrl(browserResult.url);
   const manual = extractOAuthParams(browserResult.url);
+  const parsedParams = parsed.type === 'success' ? parsed.params : undefined;
+  const parsedAuth = parsed.type === 'success' ? parsed.authentication : undefined;
 
   logGoogle('parsed return', {
     parsedType: parsed.type,
     manualError: manual.error,
-    hasCode: !!(parsed.params?.code || manual.code),
-    hasIdToken: !!(parsed.params?.id_token || manual.idToken),
+    hasCode: !!(parsedParams?.code || manual.code),
+    hasIdToken: !!(parsedParams?.id_token || manual.idToken),
   });
 
   if (manual.error) {
@@ -227,12 +229,12 @@ async function finishGoogleSignIn(session: PreparedGoogleSession): Promise<Googl
   }
 
   let idToken =
-    parsed.params?.id_token ||
-    parsed.authentication?.idToken ||
+    parsedParams?.id_token ||
+    parsedAuth?.idToken ||
     manual.idToken ||
     undefined;
 
-  const authCode = parsed.params?.code || manual.code;
+  const authCode = parsedParams?.code || manual.code;
 
   if (!idToken && authCode && !expoGo) {
     try {
