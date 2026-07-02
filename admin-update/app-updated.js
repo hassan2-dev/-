@@ -24,7 +24,7 @@ const CONFIG = {
 
 const app = initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = getFirestore(app);
-const ADMIN_ICON_URL = new URL('./assets/icon.png', window.location.href).href;
+const ADMIN_ICON_URL = `${window.location.origin}/assets/icon.png`;
 let allProducts = [];
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
