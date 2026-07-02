@@ -13,6 +13,8 @@
     "predeploy:admin": "node scripts/copy-admin-icon.js",
     "deploy:admin": "npm run predeploy:admin && npx vercel admin-update --prod",
     "deploy:admin:preview": "npm run predeploy:admin && npx vercel admin-update",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:admin:firebase": "npm run predeploy:admin && firebase deploy --only hosting,functions",
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
     "submit:ios": "eas submit --platform ios --latest --profile production",

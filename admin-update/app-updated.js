@@ -10,16 +10,11 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { FIREBASE_CONFIG } from './firebase-config.js';
+import { initAdminFcm, isAdminFcmReady } from './fcm-admin.js';
 
 const CONFIG = {
-    FIREBASE_CONFIG: {
-        apiKey: "AIzaSyAPiiVfmJdGHje0gittK-7yFTYNTQNY6Fk",
-        authDomain: "basjfk-58536.firebaseapp.com",
-        projectId: "basjfk-58536",
-        storageBucket: "basjfk-58536.firebasestorage.app",
-        messagingSenderId: "662162908373",
-        appId: "1:662162908373:web:b5a789fd0b6ca6964e2e5c"
-    }
+    FIREBASE_CONFIG,
 };
 
 const app = initializeApp(CONFIG.FIREBASE_CONFIG);
@@ -382,6 +377,7 @@ function enterAdminDashboard(initialTab = 'orders') {
         app.style.display = 'block';
         switchTab(initialTab);
         startOrderRealtimeAlerts();
+        setupAdminPushNotifications().catch(() => {});
     }, 300);
 }
 
@@ -441,6 +437,7 @@ window.switchTab = (tabId) => {
     if(tabId === 'notifications') {
         loadPushTokenStats();
         loadNotificationsHistory();
+        updateFcmStatusBanner({ ok: isAdminFcmReady() });
     }
     if(tabId === 'store-settings') loadStoreSettings();
 };
@@ -466,30 +463,69 @@ function updateBrowserNotifButton() {
     const btn = document.getElementById('enable-browser-notif-btn');
     if (!btn) return;
     const canNotify = 'Notification' in window;
-    const granted = canNotify && Notification.permission === 'granted';
+    const granted = canNotify && Notification.permission === 'granted' && isAdminFcmReady();
     btn.classList.toggle('hidden', !canNotify || granted);
 }
 
-window.requestAdminBrowserNotifications = async () => {
-    if (!('Notification' in window)) {
-        showCustomAlert('المتصفح لا يدعم الإشعارات');
+async function setupAdminPushNotifications() {
+    const result = await initAdminFcm(app, db, {
+        onForegroundMessage: ({ title, body, type, data }) => {
+            showAdminToast(title, body, type);
+            playAdminAlertSound();
+            if (data?.type === 'new_order') {
+                refreshVisibleOrdersTab();
+            } else if (data?.type === 'order_update') {
+                refreshVisibleOrdersTab();
+            }
+        },
+    });
+
+    updateBrowserNotifButton();
+    updateFcmStatusBanner(result);
+    return result;
+}
+
+function updateFcmStatusBanner(result) {
+    const el = document.getElementById('fcm-status-banner');
+    if (!el) return;
+
+    if (result?.ok) {
+        el.className = 'fcm-status-banner success';
+        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> إشعارات Firebase مفعّلة — تصل حتى مع إغلاق المتصفح';
         return;
     }
-    try {
-        const result = await Notification.requestPermission();
-        updateBrowserNotifButton();
-        if (result === 'granted') {
-            showAdminToast('تم تفعيل تنبيهات المتصفح', 'سيصلك إشعار فوري عند كل طلب جديد أو تحديث', 'new');
-            new Notification('تفاحة — لوحة الإدارة', {
-                body: 'تم تفعيل تنبيهات الطلبات بنجاح',
-                icon: ADMIN_ICON_URL,
-            });
-        } else {
-            showCustomAlert('لم يتم تفعيل الإشعارات — اسمح لها من إعدادات المتصفح');
-        }
-    } catch {
-        showCustomAlert('تعذر طلب إذن الإشعارات');
+
+    if (result?.reason === 'missing_vapid') {
+        el.className = 'fcm-status-banner warning';
+        el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> أضف مفتاح VAPID في <code>admin-update/firebase-config.js</code> ثم أعد النشر';
+        return;
     }
+
+    if (result?.reason === 'denied') {
+        el.className = 'fcm-status-banner warning';
+        el.innerHTML = '<i class="fa-solid fa-bell-slash"></i> اسمح بالإشعارات من إعدادات المتصفح ثم اضغط التفعيل مرة أخرى';
+        return;
+    }
+
+    el.className = 'fcm-status-banner muted';
+    el.innerHTML = '<i class="fa-solid fa-bell"></i> فعّل إشعارات Firebase لتصلك الطلبات حتى مع إغلاق Chrome';
+}
+
+window.requestAdminBrowserNotifications = async () => {
+    const result = await setupAdminPushNotifications();
+    if (result.ok) {
+        showAdminToast('تم تفعيل إشعارات Firebase', 'ستصلك الطلبات حتى مع إغلاق المتصفح', 'new');
+        return;
+    }
+    if (result.reason === 'missing_vapid') {
+        showCustomAlert('أضف مفتاح VAPID في firebase-config.js من Firebase Console → Cloud Messaging');
+        return;
+    }
+    if (result.reason === 'denied') {
+        showCustomAlert('لم يتم تفعيل الإشعارات — اسمح لها من إعدادات المتصفح');
+        return;
+    }
+    showCustomAlert(result.detail || 'تعذر تفعيل إشعارات Firebase');
 };
 
 function showAdminToast(title, body, type = 'new') {
@@ -571,12 +607,6 @@ function startOrderRealtimeAlerts() {
     ordersState.clear();
     updateBrowserNotifButton();
 
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission()
-            .then(() => updateBrowserNotifButton())
-            .catch(() => {});
-    }
-
     ordersUnsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
         const pendingCount = snapshot.docs.filter(
             (docSnap) => (docSnap.data().status || 'pending') === 'pending'
@@ -602,7 +632,7 @@ function startOrderRealtimeAlerts() {
             const customerName = data.name || 'زبون';
             const total = `${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع`;
 
-            if (change.type === 'added' && status === 'pending') {
+            if (change.type === 'added' && status === 'pending' && !isAdminFcmReady()) {
                 showAdminBrowserNotification({
                     title: '📦 طلب جديد',
                     body: `${customerName} — ${total}`,
@@ -611,7 +641,7 @@ function startOrderRealtimeAlerts() {
                 shouldRefresh = true;
             } else if (change.type === 'modified') {
                 const prevStatus = ordersState.get(id);
-                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id)) {
+                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id) && !isAdminFcmReady()) {
                     showAdminBrowserNotification({
                         title: '🔄 تحديث طلب',
                         body: `${customerName}: ${getOrderStatusLabel(prevStatus)} → ${getOrderStatusLabel(status)}`,
@@ -1079,7 +1109,8 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
 
     await updateDoc(doc(db, "orders", id), {
         status: nextStatus,
-        statusUpdatedAt: serverTimestamp()
+        statusUpdatedAt: serverTimestamp(),
+        updatedBy: 'admin',
     });
 
     const NOTIF_MSG = {

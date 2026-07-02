@@ -109,7 +109,7 @@
           </div>
           <div class="topbar-actions">
             <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" onclick="requestAdminBrowserNotifications()">
-              <i class="fa-solid fa-bell"></i> تفعيل تنبيهات المتصفح
+              <i class="fa-solid fa-bell"></i> تفعيل إشعارات Firebase
             </button>
             <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
             <button type="button" class="logout-btn" onclick="logoutAdmin()">
@@ -327,7 +327,23 @@
 
           <!-- الإشعارات -->
           <div id="notifications" class="tab-content">
+            <div id="fcm-status-banner" class="fcm-status-banner muted">
+              <i class="fa-solid fa-bell"></i> فعّل إشعارات Firebase لتصلك الطلبات حتى مع إغلاق Chrome
+            </div>
             <div id="push-token-stats"></div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-brands fa-google"></i>
+                <h2>إشعارات الأدمن (Firebase)</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                تصلك إشعارات الطلبات الجديدة والتحديثات <strong>حتى لو سكرت Chrome</strong> — تحتاج تفعيل مرة واحدة من الزر بالأعلى.
+              </p>
+              <button type="button" class="btn-primary" onclick="requestAdminBrowserNotifications()">
+                <i class="fa-solid fa-bell"></i> تفعيل إشعارات Firebase
+              </button>
+            </div>
 
             <div class="panel">
               <div class="panel-header">

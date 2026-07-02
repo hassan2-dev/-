@@ -437,6 +437,42 @@ body {
   line-height: 1.45;
 }
 
+.fcm-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+}
+
+.fcm-status-banner.success {
+  background: #e8f5ea;
+  color: #2b7340;
+  border-color: #c8e6c9;
+}
+
+.fcm-status-banner.warning {
+  background: #fff8e1;
+  color: #e65100;
+  border-color: #ffe0b2;
+}
+
+.fcm-status-banner.muted {
+  background: #f5f7f5;
+  color: var(--text-muted);
+}
+
+.fcm-status-banner code {
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
 main {
   flex: 1;
   padding: 1.5rem 1.75rem 2.5rem;
