@@ -12,7 +12,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/fireba
 import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 import { FIREBASE_CONFIG, ADMIN_NOTIFY_SECRET } from './firebase-config.js';
 import { initAdminFcm, isAdminFcmReady } from './fcm-admin.js';
-import { initWebPush, isWebPushReady } from './web-push-admin.js';
+import { initWebPush, isWebPushReady, describeWebPushFailure } from './web-push-admin.js';
 
 const CONFIG = {
     FIREBASE_CONFIG,
@@ -378,7 +378,11 @@ function enterAdminDashboard(initialTab = 'orders') {
         app.style.display = 'block';
         switchTab(initialTab);
         startOrderRealtimeAlerts();
-        setupWebPushNotifications().catch(() => {});
+        if ('Notification' in window && Notification.permission === 'granted') {
+            setupWebPushNotifications().catch((error) => {
+                console.warn('[WebPush] restore failed', error);
+            });
+        }
     }, 300);
 }
 
@@ -519,24 +523,45 @@ async function sendAdminPushNotify({ title, body, data = {} }) {
     }
 }
 
+function setWebPushButtonsLoading(loading) {
+    document.querySelectorAll('[data-web-push-btn]').forEach((btn) => {
+        btn.disabled = loading;
+        if (loading) {
+            if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التفعيل...';
+        } else if (btn.dataset.defaultHtml) {
+            btn.innerHTML = btn.dataset.defaultHtml;
+        }
+    });
+}
+
 async function setupWebPushNotifications() {
     const result = await initWebPush(db);
     updatePwaStatusBanner(result);
     updateBrowserNotifButton();
+    if (result.ok && typeof window.loadPushTokenStats === 'function') {
+        window.loadPushTokenStats();
+    }
     return result;
 }
 
 window.requestAdminBrowserNotifications = async () => {
-    const result = await setupWebPushNotifications();
-    if (result.ok) {
-        showAdminToast('تم تفعيل Web Push', 'ثبّت التطبيق (PWA) ثم جرّب إغلاقه وإرسال طلب', 'new');
-        return;
+    setWebPushButtonsLoading(true);
+    showAdminToast('جاري التفعيل...', 'اسمح بالإشعارات إذا طلب المتصفح', 'new');
+
+    try {
+        const result = await setupWebPushNotifications();
+        if (result.ok) {
+            showAdminToast('تم تفعيل Web Push ✅', 'ثبّت التطبيق (PWA) ثم جرّب إغلاقه وإرسال طلب', 'new');
+            return;
+        }
+        showCustomAlert(describeWebPushFailure(result));
+    } catch (error) {
+        console.error('[WebPush] button failed', error);
+        showCustomAlert(error?.message || 'حدث خطأ غير متوقع');
+    } finally {
+        setWebPushButtonsLoading(false);
     }
-    if (result.reason === 'denied') {
-        showCustomAlert('اسمح بالإشعارات من إعدادات المتصفح');
-        return;
-    }
-    showCustomAlert(result.detail || 'تعذر تفعيل الإشعارات');
 };
 
 window.testAdminWebPush = async () => {

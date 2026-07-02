@@ -110,7 +110,7 @@
             </div>
           </div>
           <div class="topbar-actions">
-            <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" onclick="requestAdminBrowserNotifications()">
+            <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" data-web-push-btn onclick="requestAdminBrowserNotifications()">
               <i class="fa-solid fa-bell"></i> تفعيل Web Push
             </button>
             <button type="button" id="pwa-install-btn" class="pwa-install-btn hidden" onclick="installPwaApp()">
@@ -347,7 +347,7 @@
                 يعمل على <strong>Android / Windows</strong> بدون بطاقة أو Blaze.
               </p>
               <div style="display:flex;flex-wrap:wrap;gap:0.75rem">
-                <button type="button" class="btn-primary" onclick="requestAdminBrowserNotifications()">
+                <button type="button" class="btn-primary" data-web-push-btn onclick="requestAdminBrowserNotifications()">
                   <i class="fa-solid fa-bell"></i> تفعيل Web Push
                 </button>
                 <button type="button" id="pwa-install-btn-panel" class="btn-primary" style="background:#1976d2" onclick="installPwaApp()">
