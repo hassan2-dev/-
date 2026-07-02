@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // اشتراكات Web Push للأدمن — يحتاجها Vercel API
+    match /admin_push_subscriptions/{id} {
+      allow read, write: if true;
+    }
+
+    // باقي المجموعات — نفس السلوك الحالي للوحة الأدمن
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

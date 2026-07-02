@@ -506,7 +506,7 @@ window.installPwaApp = async () => {
 };
 
 async function sendAdminPushNotify({ title, body, data = {} }) {
-    if (!ADMIN_NOTIFY_SECRET) return { ok: false };
+    if (!ADMIN_NOTIFY_SECRET) return { ok: false, error: 'missing_secret' };
     try {
         const response = await fetch(ADMIN_NOTIFY_API, {
             method: 'POST',
@@ -516,11 +516,34 @@ async function sendAdminPushNotify({ title, body, data = {} }) {
             },
             body: JSON.stringify({ title, body, data }),
         });
-        return await response.json();
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { ok: false, ...payload, httpStatus: response.status };
+        }
+        return payload;
     } catch (error) {
         console.warn('[notify-api]', error);
-        return { ok: false };
+        return { ok: false, error: error?.message || 'network_error' };
     }
+}
+
+function describeNotifyApiFailure(result) {
+    if (result?.error === 'missing_vapid_env') {
+        return 'أضف VAPID_PUBLIC_KEY و VAPID_PRIVATE_KEY في Vercel ثم اعمل Redeploy';
+    }
+    if (result?.error === 'unauthorized') {
+        return 'ADMIN_NOTIFY_SECRET غير صحيح في Vercel';
+    }
+    if (result?.message === 'no_subscriptions') {
+        return 'ماكو اشتراك محفوظ — اضغط تفعيل Web Push مرة ثانية';
+    }
+    if (String(result?.error || '').includes('firestore_list_failed')) {
+        return 'Firebase ما يسمح بقراءة الاشتراكات — انشر firestore.rules';
+    }
+    if (result?.httpStatus === 404) {
+        return 'API غير موجود — تأكد من نشر admin-update على Vercel';
+    }
+    return result?.error || 'تحقق من إعدادات Vercel';
 }
 
 function setWebPushButtonsLoading(loading) {
@@ -552,7 +575,22 @@ window.requestAdminBrowserNotifications = async () => {
     try {
         const result = await setupWebPushNotifications();
         if (result.ok) {
-            showAdminToast('تم تفعيل Web Push ✅', 'ثبّت التطبيق (PWA) ثم جرّب إغلاقه وإرسال طلب', 'new');
+            const pushTest = await sendAdminPushNotify({
+                title: '🔔 تم تفعيل الإشعارات',
+                body: 'إذا وصلك هذا والتطبيق مسكّر — كل شي شغّال ✅',
+                data: { type: 'test' },
+            });
+            if (pushTest?.sent > 0) {
+                showAdminToast(
+                    'تم التفعيل ✅',
+                    'أغلق التطبيق من الأخيرة وأرسل طلب من تطبيق الزبون',
+                    'new'
+                );
+            } else {
+                showCustomAlert(
+                    `تم السماح محلياً، لكن السيرفر ما أرسل إشعار:\n${describeNotifyApiFailure(pushTest)}`
+                );
+            }
             return;
         }
         showCustomAlert(describeWebPushFailure(result));
@@ -575,14 +613,10 @@ window.testAdminWebPush = async () => {
         data: { type: 'test' },
     });
     if (result?.sent > 0) {
-        showAdminToast('تم الإرسال', `وصل لـ ${result.sent} جهاز — أغلق التطبيق وجرب مرة ثانية`, 'new');
+        showAdminToast('تم الإرسال', `وصل لـ ${result.sent} جهاز — جرّب إغلاق التطبيق`, 'new');
         return;
     }
-    if (result?.message === 'no_subscriptions') {
-        showCustomAlert('ماكو اشتراك مسجّل — اضغط تفعيل Web Push مرة ثانية');
-        return;
-    }
-    showCustomAlert('تعذر الإرسال — تأكد من نشر Vercel مع مفاتيح VAPID');
+    showCustomAlert(describeNotifyApiFailure(result));
 };
 
 window.setupAdminFcmLegacy = async () => {
@@ -608,7 +642,7 @@ function updatePwaStatusBanner(result) {
 
     if (result?.ok || isWebPushReady()) {
         el.className = 'fcm-status-banner success';
-        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> Web Push مفعّل — ثبّت التطبيق (PWA) وجرّب إغلاقه';
+        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> Web Push مفعّل — <strong>وهو مفتوح</strong> يشتغل مباشرة، <strong>وهو مسكّر</strong> يحتاج طلب من تطبيق الزبون';
         return;
     }
 
