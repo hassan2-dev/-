@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -12,6 +13,8 @@ import { discovery } from 'expo-auth-session/providers/google';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import {
   EXPO_AUTH_PROXY_REDIRECT_URI,
+  GOOGLE_ANDROID_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
   GOOGLE_WEB_CLIENT_ID,
   getGoogleOAuthRedirectUri,
 } from './authConfig';
@@ -28,6 +31,16 @@ function logGoogle(step: string, detail?: unknown) {
   if (__DEV__) {
     console.log(`[Google Sign-In] ${step}`, detail ?? '');
   }
+}
+
+function getNativeGoogleClientId(): string {
+  if (Platform.OS === 'ios') {
+    return GOOGLE_IOS_CLIENT_ID;
+  }
+  if (Platform.OS === 'android') {
+    return GOOGLE_ANDROID_CLIENT_ID;
+  }
+  return GOOGLE_WEB_CLIENT_ID;
 }
 
 function getProjectFullName(): string {
@@ -113,10 +126,15 @@ type PreparedGoogleSession = {
 
 async function buildGoogleSession(): Promise<PreparedGoogleSession> {
   const expoGo = isExpoGo();
-  // المتصفح في Expo Go و TestFlight يستخدم Web Client + id_token
-  const clientId = GOOGLE_WEB_CLIENT_ID;
+  // Expo Go → Web Client + https proxy
+  // TestFlight/APK → iOS/Android Client + reversed scheme (مو Web Client)
+  const clientId = expoGo ? GOOGLE_WEB_CLIENT_ID : getNativeGoogleClientId();
   if (!clientId) {
     throw new Error('missing_client');
+  }
+
+  if (!expoGo && Platform.OS === 'ios' && clientId === GOOGLE_WEB_CLIENT_ID) {
+    throw new Error('missing_ios_client');
   }
 
   const oauthRedirectUri = getGoogleOAuthRedirectUri(clientId, expoGo);
@@ -163,7 +181,7 @@ async function finishGoogleSignIn(session: PreparedGoogleSession): Promise<Googl
     oauthRedirectUri,
     browserReturnUrl,
     clientId: clientId.slice(0, 12) + '...',
-    flow: expoGo ? 'id_token+proxy' : 'id_token+native',
+    flow: expoGo ? 'id_token+proxy' : `id_token+${Platform.OS}`,
   });
 
   logGoogle('opening browser', { startUrl: startUrl.slice(0, 80) + '...', browserReturnUrl });
@@ -247,6 +265,13 @@ export async function promptGoogleSignIn(): Promise<GoogleSignInResult> {
     return finishGoogleSignIn(session);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (message === 'missing_ios_client') {
+      return {
+        ok: false,
+        reason: 'missing_client',
+        detail: 'أضف googleIosClientId في app.json',
+      };
+    }
     if (message === 'missing_client') {
       return { ok: false, reason: 'missing_client', detail: 'googleWebClientId فارغ' };
     }

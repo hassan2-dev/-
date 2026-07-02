@@ -22,7 +22,7 @@ export const EXPO_AUTH_PROXY_REDIRECT_URI =
     ? `https://auth.expo.io/@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
     : '';
 
-/** Native builds: reversed scheme من Web Client (معتمد من Google للتطبيقات) */
+/** Native: reversed scheme من نفس الـ Client (iOS أو Android) — ليس Web Client */
 export function googleClientIdToRedirectUri(clientId: string): string {
   const stripped = clientId.replace(/\.apps\.googleusercontent\.com$/i, '');
   return `com.googleusercontent.apps.${stripped}:/oauth2redirect/google`;
@@ -40,8 +40,12 @@ export function getGoogleReversedClientScheme(clientId: string): string {
   return `com.googleusercontent.apps.${stripped}`;
 }
 
-export const GOOGLE_NATIVE_URL_SCHEME = GOOGLE_WEB_CLIENT_ID
-  ? getGoogleReversedClientScheme(GOOGLE_WEB_CLIENT_ID)
+export const GOOGLE_IOS_URL_SCHEME = GOOGLE_IOS_CLIENT_ID
+  ? getGoogleReversedClientScheme(GOOGLE_IOS_CLIENT_ID)
+  : '';
+
+export const GOOGLE_ANDROID_URL_SCHEME = GOOGLE_ANDROID_CLIENT_ID
+  ? getGoogleReversedClientScheme(GOOGLE_ANDROID_CLIENT_ID)
   : '';
 
 export function hasGoogleAuthConfig(): boolean {
