@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="لوحة إدارة متجر تفاحة — إدارة الطلبات والمنتجات والإشعارات" />
   <meta name="theme-color" content="#EEF5FC" />
-  <meta name="apple-mobile-web-app-title" content="تفاحة" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>تفاحة — لوحة الإدارة</title>
   <link rel="icon" type="image/png" href="/assets/icon.png" />
   <link rel="apple-touch-icon" href="/assets/icon.png" />
-  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="./admin.css" />
 </head>
@@ -109,7 +111,10 @@
           </div>
           <div class="topbar-actions">
             <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" onclick="requestAdminBrowserNotifications()">
-              <i class="fa-solid fa-bell"></i> تفعيل إشعارات Firebase
+              <i class="fa-solid fa-bell"></i> تفعيل Web Push
+            </button>
+            <button type="button" id="pwa-install-btn" class="pwa-install-btn hidden" onclick="installPwaApp()">
+              <i class="fa-solid fa-download"></i> تثبيت التطبيق
             </button>
             <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
             <button type="button" class="logout-btn" onclick="logoutAdmin()">
@@ -328,20 +333,39 @@
           <!-- الإشعارات -->
           <div id="notifications" class="tab-content">
             <div id="fcm-status-banner" class="fcm-status-banner muted">
-              <i class="fa-solid fa-bell"></i> فعّل إشعارات Firebase لتصلك الطلبات حتى مع إغلاق Chrome
+              <i class="fa-solid fa-mobile-screen"></i> فعّل Web Push وثبّت التطبيق (PWA) على جهازك
             </div>
             <div id="push-token-stats"></div>
 
             <div class="panel">
               <div class="panel-header">
-                <i class="fa-brands fa-google"></i>
-                <h2>إشعارات الأدمن (Firebase)</h2>
+                <i class="fa-solid fa-mobile-screen-button"></i>
+                <h2>تطبيق PWA + Web Push (مجاني)</h2>
               </div>
               <p class="order-meta" style="margin-bottom:1rem">
-                تصلك إشعارات الطلبات الجديدة والتحديثات <strong>حتى لو سكرت Chrome</strong> — تحتاج تفعيل مرة واحدة من الزر بالأعلى.
+                ① فعّل الإشعارات ② ثبّت التطبيق على الشاشة الرئيسية ③ أغلق التطبيق من الأخيرة وجرب طلب.
+                يعمل على <strong>Android / Windows</strong> بدون بطاقة أو Blaze.
               </p>
-              <button type="button" class="btn-primary" onclick="requestAdminBrowserNotifications()">
-                <i class="fa-solid fa-bell"></i> تفعيل إشعارات Firebase
+              <div style="display:flex;flex-wrap:wrap;gap:0.75rem">
+                <button type="button" class="btn-primary" onclick="requestAdminBrowserNotifications()">
+                  <i class="fa-solid fa-bell"></i> تفعيل Web Push
+                </button>
+                <button type="button" id="pwa-install-btn-panel" class="btn-primary" style="background:#1976d2" onclick="installPwaApp()">
+                  <i class="fa-solid fa-download"></i> تثبيت PWA
+                </button>
+              </div>
+            </div>
+
+            <div class="panel" style="opacity:0.85">
+              <div class="panel-header">
+                <i class="fa-brands fa-google"></i>
+                <h2>Firebase FCM (اختياري — يحتاج Blaze)</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                بديل متقدم يحتاج فوترة Google. استخدم Web Push أعلاه إذا ما عندك بطاقة.
+              </p>
+              <button type="button" class="btn-primary" onclick="setupAdminFcmLegacy()">
+                <i class="fa-solid fa-bell"></i> تفعيل Firebase FCM
               </button>
             </div>
 

@@ -401,6 +401,25 @@ body {
   display: none;
 }
 
+.pwa-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #bbdefb;
+  background: #e3f2fd;
+  color: #1565c0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.pwa-install-btn.hidden {
+  display: none;
+}
+
 .admin-toast {
   position: fixed;
   top: 20px;

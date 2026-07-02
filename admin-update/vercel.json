@@ -5,6 +5,13 @@
   "cleanUrls": true,
   "headers": [
     {
+      "source": "/push-sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
       "source": "/firebase-messaging-sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" },

@@ -10,8 +10,9 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-import { FIREBASE_CONFIG } from './firebase-config.js';
+import { FIREBASE_CONFIG, ADMIN_NOTIFY_SECRET } from './firebase-config.js';
 import { initAdminFcm, isAdminFcmReady } from './fcm-admin.js';
+import { initWebPush, isWebPushReady } from './web-push-admin.js';
 
 const CONFIG = {
     FIREBASE_CONFIG,
@@ -377,7 +378,7 @@ function enterAdminDashboard(initialTab = 'orders') {
         app.style.display = 'block';
         switchTab(initialTab);
         startOrderRealtimeAlerts();
-        setupAdminPushNotifications().catch(() => {});
+        setupWebPushNotifications().catch(() => {});
     }, 300);
 }
 
@@ -437,7 +438,7 @@ window.switchTab = (tabId) => {
     if(tabId === 'notifications') {
         loadPushTokenStats();
         loadNotificationsHistory();
-        updateFcmStatusBanner({ ok: isAdminFcmReady() });
+        updatePwaStatusBanner({ ok: isWebPushReady() });
     }
     if(tabId === 'store-settings') loadStoreSettings();
 };
@@ -471,69 +472,109 @@ function updateBrowserNotifButton() {
     const btn = document.getElementById('enable-browser-notif-btn');
     if (!btn) return;
     const canNotify = 'Notification' in window;
-    const granted = canNotify && Notification.permission === 'granted' && isAdminFcmReady();
+    const granted = canNotify && Notification.permission === 'granted' && isWebPushReady();
     btn.classList.toggle('hidden', !canNotify || granted);
 }
 
-async function setupAdminPushNotifications() {
-    const result = await initAdminFcm(app, db, {
-        onForegroundMessage: ({ title, body, type, data }) => {
-            const key = data?.orderId ? `fcm-${data.orderId}-${data.type || type}` : `fcm-${Date.now()}`;
-            alertOrderOnce(key, () => {
-                showAdminToast(title, body, type);
-                playAdminAlertSound();
-                refreshVisibleOrdersTab();
-            });
-        },
-    });
+const ADMIN_NOTIFY_API = `${window.location.origin}/api/notify-order`;
 
+let deferredPwaInstall = null;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredPwaInstall = event;
+    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-panel').forEach((btn) => {
+        btn.classList.remove('hidden');
+    });
+});
+
+window.installPwaApp = async () => {
+    if (!deferredPwaInstall) {
+        showCustomAlert('ثبّت التطبيق من قائمة المتصفح: Add to Home Screen / تثبيت');
+        return;
+    }
+    deferredPwaInstall.prompt();
+    const { outcome } = await deferredPwaInstall.userChoice;
+    deferredPwaInstall = null;
+    if (outcome === 'accepted') {
+        showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
+    }
+};
+
+async function sendAdminPushNotify({ title, body, data = {} }) {
+    if (!ADMIN_NOTIFY_SECRET) return { ok: false };
+    try {
+        const response = await fetch(ADMIN_NOTIFY_API, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-notify-secret': ADMIN_NOTIFY_SECRET,
+            },
+            body: JSON.stringify({ title, body, data }),
+        });
+        return await response.json();
+    } catch (error) {
+        console.warn('[notify-api]', error);
+        return { ok: false };
+    }
+}
+
+async function setupWebPushNotifications() {
+    const result = await initWebPush(db);
+    updatePwaStatusBanner(result);
     updateBrowserNotifButton();
-    updateFcmStatusBanner(result);
     return result;
 }
 
-function updateFcmStatusBanner(result) {
+window.requestAdminBrowserNotifications = async () => {
+    const result = await setupWebPushNotifications();
+    if (result.ok) {
+        showAdminToast('تم تفعيل Web Push', 'ثبّت التطبيق (PWA) ثم جرّب إغلاقه وإرسال طلب', 'new');
+        return;
+    }
+    if (result.reason === 'denied') {
+        showCustomAlert('اسمح بالإشعارات من إعدادات المتصفح');
+        return;
+    }
+    showCustomAlert(result.detail || 'تعذر تفعيل الإشعارات');
+};
+
+window.setupAdminFcmLegacy = async () => {
+    const result = await initAdminFcm(app, db, {
+        onForegroundMessage: ({ title, body, type }) => {
+            showAdminToast(title, body, type === 'update' ? 'update' : 'new');
+        },
+    });
+    if (result.ok) {
+        showAdminToast('تم تفعيل Firebase FCM', 'يحتاج Blaze + Cloud Functions للإشعارات بالخلفية', 'new');
+        return;
+    }
+    if (result.reason === 'denied') {
+        showCustomAlert('اسمح بالإشعارات من إعدادات المتصفح');
+        return;
+    }
+    showCustomAlert(result.detail || 'تعذر تفعيل Firebase — استخدم Web Push أعلاه');
+};
+
+function updatePwaStatusBanner(result) {
     const el = document.getElementById('fcm-status-banner');
     if (!el) return;
 
-    if (result?.ok) {
+    if (result?.ok || isWebPushReady()) {
         el.className = 'fcm-status-banner success';
-        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> إشعارات Firebase مفعّلة — داخل اللوحة فورية، وللخلفية انشر Cloud Functions: <code>npm run deploy:functions</code>';
-        return;
-    }
-
-    if (result?.reason === 'missing_vapid') {
-        el.className = 'fcm-status-banner warning';
-        el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> أضف مفتاح VAPID في <code>admin-update/firebase-config.js</code> ثم أعد النشر';
+        el.innerHTML = '<i class="fa-solid fa-circle-check"></i> Web Push مفعّل — ثبّت التطبيق (PWA) وجرّب إغلاقه';
         return;
     }
 
     if (result?.reason === 'denied') {
         el.className = 'fcm-status-banner warning';
-        el.innerHTML = '<i class="fa-solid fa-bell-slash"></i> اسمح بالإشعارات من إعدادات المتصفح ثم اضغط التفعيل مرة أخرى';
+        el.innerHTML = '<i class="fa-solid fa-bell-slash"></i> اسمح بالإشعارات ثم اضغط التفعيل';
         return;
     }
 
     el.className = 'fcm-status-banner muted';
-    el.innerHTML = '<i class="fa-solid fa-bell"></i> فعّل إشعارات Firebase لتصلك الطلبات حتى مع إغلاق Chrome';
+    el.innerHTML = '<i class="fa-solid fa-mobile-screen"></i> فعّل Web Push وثبّت التطبيق (PWA) على جهازك';
 }
-
-window.requestAdminBrowserNotifications = async () => {
-    const result = await setupAdminPushNotifications();
-    if (result.ok) {
-        showAdminToast('تم تفعيل إشعارات Firebase', 'ستصلك الطلبات حتى مع إغلاق المتصفح', 'new');
-        return;
-    }
-    if (result.reason === 'missing_vapid') {
-        showCustomAlert('أضف مفتاح VAPID في firebase-config.js من Firebase Console → Cloud Messaging');
-        return;
-    }
-    if (result.reason === 'denied') {
-        showCustomAlert('لم يتم تفعيل الإشعارات — اسمح لها من إعدادات المتصفح');
-        return;
-    }
-    showCustomAlert(result.detail || 'تعذر تفعيل إشعارات Firebase');
-};
 
 function showAdminToast(title, body, type = 'new') {
     const toast = document.createElement('div');
@@ -646,6 +687,11 @@ function startOrderRealtimeAlerts() {
                         body: `${customerName} — ${total}`,
                         tabId: 'orders',
                     });
+                    sendAdminPushNotify({
+                        title: '📦 طلب جديد',
+                        body: `${customerName} — ${total}`,
+                        data: { type: 'new_order', orderId: id },
+                    }).catch(() => {});
                 });
                 shouldRefresh = true;
             } else if (change.type === 'modified') {

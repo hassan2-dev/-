@@ -12,6 +12,7 @@ import {
   addNotificationListeners,
 } from '../lib/pushNotifications';
 import { getOrderStatusNotification } from '../lib/notificationMessages';
+import { notifyAdminNewOrder } from '../lib/adminNotify';
 import { Category, Product, CartItem, StoreSettings } from '../lib/types';
 import { normalizeProduct } from '../lib/productImage';
 import { DELIVERY_COST } from '../lib/theme';
@@ -706,6 +707,11 @@ export function AppProvider({ children }: { children: any }) {
 
     const success = await addDocument('orders', orderData);
     if (success) {
+      notifyAdminNewOrder({
+        title: '📦 طلب جديد',
+        body: `${name} — ${Number(totals.total || 0).toLocaleString('ar-IQ')} د.ع`,
+      }).catch(() => {});
+
       const msg = getOrderStatusNotification('pending');
       const notification: Record<string, unknown> = {
         phone,

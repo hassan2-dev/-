@@ -144,14 +144,16 @@ async function buildGoogleSession(): Promise<PreparedGoogleSession> {
     nonce: await generateHexStringAsync(16),
   };
 
+  // Expo Go: Web Client + proxy يدعم implicit id_token
+  // TestFlight/APK: iOS/Android Client يتطلب authorization code + PKCE
   const request = await loadAsync(
     {
       clientId,
       redirectUri: oauthRedirectUri,
       scopes: GOOGLE_SCOPES,
       extraParams,
-      usePKCE: false,
-      responseType: ResponseType.IdToken,
+      usePKCE: !expoGo,
+      responseType: expoGo ? ResponseType.IdToken : ResponseType.Code,
     },
     discovery
   );
@@ -181,7 +183,7 @@ async function finishGoogleSignIn(session: PreparedGoogleSession): Promise<Googl
     oauthRedirectUri,
     browserReturnUrl,
     clientId: clientId.slice(0, 12) + '...',
-    flow: expoGo ? 'id_token+proxy' : `id_token+${Platform.OS}`,
+    flow: expoGo ? 'id_token+proxy' : `code+pkce+${Platform.OS}`,
   });
 
   logGoogle('opening browser', { startUrl: startUrl.slice(0, 80) + '...', browserReturnUrl });
