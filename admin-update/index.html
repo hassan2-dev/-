@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>لوحة إدارة تفاحة</title>
+  <meta name="description" content="لوحة إدارة متجر تفاحة — إدارة الطلبات والمنتجات والإشعارات" />
+  <meta name="theme-color" content="#EEF5FC" />
+  <meta name="apple-mobile-web-app-title" content="تفاحة" />
+  <title>تفاحة — لوحة الإدارة</title>
+  <link rel="icon" type="image/png" href="./assets/icon.png" />
+  <link rel="apple-touch-icon" href="./assets/icon.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="./admin.css" />
 </head>
@@ -11,8 +17,10 @@
   <!-- تسجيل الدخول -->
   <div id="login-overlay">
     <div class="login-box">
-      <div class="login-logo">🍎</div>
-      <h1>تفاحة</h1>
+      <div class="login-logo">
+        <img src="./assets/icon.png" alt="شعار تفاحة" class="brand-logo" width="88" height="88" />
+      </div>
+      <h1>متجر تفاحة</h1>
       <p>لوحة إدارة المتجر الإلكتروني</p>
       <label class="field-label" for="admin-pass">رمز الدخول</label>
       <input
@@ -35,14 +43,20 @@
       <!-- الشريط الجانبي -->
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-          <h1>🍎 تفاحة</h1>
-          <span>لوحة الإدارة</span>
+          <div class="sidebar-brand-row">
+            <img src="./assets/icon.png" alt="تفاحة" class="brand-logo brand-logo-sm" width="42" height="42" />
+            <div>
+              <h1>متجر تفاحة</h1>
+              <span>لوحة الإدارة</span>
+            </div>
+          </div>
         </div>
 
         <nav class="sidebar-nav">
           <div class="nav-group-label">الطلبات</div>
           <button class="nav-item active" onclick="switchTab('orders')">
             <i class="fa-solid fa-clock"></i> قيد الانتظار
+            <span id="pending-orders-badge" class="nav-badge hidden">0</span>
           </button>
           <button class="nav-item" onclick="switchTab('accepted-orders')">
             <i class="fa-solid fa-truck"></i> طلبات نشطة
@@ -87,12 +101,16 @@
             <button class="menu-toggle" onclick="toggleSidebar(true)" aria-label="القائمة">
               <i class="fa-solid fa-bars"></i>
             </button>
+            <img src="./assets/icon.png" alt="" class="brand-logo brand-logo-xs topbar-logo" width="36" height="36" aria-hidden="true" />
             <div>
               <div class="topbar-title" id="page-title">طلبات قيد الانتظار</div>
               <div class="topbar-sub" id="page-sub">إدارة طلبات الزبائن</div>
             </div>
           </div>
           <div class="topbar-actions">
+            <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" onclick="requestAdminBrowserNotifications()">
+              <i class="fa-solid fa-bell"></i> تفعيل تنبيهات المتصفح
+            </button>
             <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
             <button type="button" class="logout-btn" onclick="logoutAdmin()">
               <i class="fa-solid fa-right-from-bracket"></i> خروج
@@ -310,6 +328,38 @@
           <!-- الإشعارات -->
           <div id="notifications" class="tab-content">
             <div id="push-token-stats"></div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-user"></i>
+                <h2>إرسال لمستخدم محدد</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                أرسل إشعاراً لزبون واحد عبر البريد أو رقم الهاتف المسجّل في التطبيق.
+              </p>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="user-notif-email">البريد (اختياري)</label>
+                  <input type="email" id="user-notif-email" placeholder="example@gmail.com" />
+                </div>
+                <div class="form-field">
+                  <label for="user-notif-phone">رقم الهاتف (اختياري)</label>
+                  <input type="tel" id="user-notif-phone" placeholder="07XXXXXXXXX" />
+                </div>
+                <div class="form-field full">
+                  <label for="user-notif-title">عنوان الإشعار</label>
+                  <input type="text" id="user-notif-title" placeholder="مثال: تحديث طلبك" />
+                </div>
+                <div class="form-field full">
+                  <label for="user-notif-body">نص الإشعار</label>
+                  <textarea id="user-notif-body" rows="3" placeholder="اكتب رسالة الإشعار..." style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid #e5e7eb;font-family:inherit"></textarea>
+                </div>
+              </div>
+              <button id="btn-send-user-notif" class="btn-primary" onclick="sendUserNotification()">
+                <i class="fa-solid fa-paper-plane"></i> إرسال للمستخدم
+              </button>
+            </div>
+
             <div class="panel">
               <div class="panel-header">
                 <i class="fa-solid fa-bullhorn"></i>
@@ -329,6 +379,14 @@
               <button id="btn-send-broadcast" class="btn-primary" onclick="sendBroadcastNotification()">
                 <i class="fa-solid fa-paper-plane"></i> إرسال للجميع
               </button>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-list"></i>
+                <h2>سجل الإشعارات</h2>
+              </div>
+              <div id="notifications-history-list" class="notifications-history"></div>
             </div>
           </div>
 
@@ -378,7 +436,7 @@
       offers: { title: 'العروض', sub: 'صور العروض الترويجية' },
       banners: { title: 'البنرات', sub: 'بانرات الصفحة الرئيسية' },
       sales: { title: 'المبيعات', sub: 'إجمالي الإيرادات' },
-      notifications: { title: 'الإشعارات', sub: 'إرسال Push للجميع' },
+      notifications: { title: 'الإشعارات', sub: 'إرسال وإدارة إشعارات الزبائن' },
       'store-settings': { title: 'أوقات العمل', sub: 'تحديد ساعات استقبال الطلبات' },
     };
 

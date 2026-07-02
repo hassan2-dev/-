@@ -9,7 +9,7 @@
 // ============================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 const CONFIG = {
     FIREBASE_CONFIG: {
@@ -24,6 +24,7 @@ const CONFIG = {
 
 const app = initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = getFirestore(app);
+const ADMIN_ICON_URL = new URL('./assets/icon.png', window.location.href).href;
 let allProducts = [];
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -380,10 +381,13 @@ function enterAdminDashboard(initialTab = 'orders') {
         overlay.style.display = 'none';
         app.style.display = 'block';
         switchTab(initialTab);
+        startOrderRealtimeAlerts();
     }, 300);
 }
 
 function showLoginScreen() {
+    stopOrderRealtimeAlerts();
+    lastPendingCount = null;
     localStorage.removeItem(ADMIN_SESSION_KEY);
     const overlay = document.getElementById('login-overlay');
     const app = document.getElementById('app-content');
@@ -434,9 +438,214 @@ window.switchTab = (tabId) => {
     if(tabId === 'orders') loadOrders('pending');
     if(tabId === 'accepted-orders') loadOrders('accepted');
     if(tabId === 'sales') loadSales();
-    if(tabId === 'notifications') loadPushTokenStats();
+    if(tabId === 'notifications') {
+        loadPushTokenStats();
+        loadNotificationsHistory();
+    }
     if(tabId === 'store-settings') loadStoreSettings();
 };
+
+let lastPendingCount = null;
+let ordersUnsubscribe = null;
+let ordersAlertsReady = false;
+const ordersState = new Map();
+const locallyUpdatedOrders = new Set();
+
+function updatePendingBadgeFromCount(count) {
+    const badge = document.getElementById('pending-orders-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function updateBrowserNotifButton() {
+    const btn = document.getElementById('enable-browser-notif-btn');
+    if (!btn) return;
+    const canNotify = 'Notification' in window;
+    const granted = canNotify && Notification.permission === 'granted';
+    btn.classList.toggle('hidden', !canNotify || granted);
+}
+
+window.requestAdminBrowserNotifications = async () => {
+    if (!('Notification' in window)) {
+        showCustomAlert('المتصفح لا يدعم الإشعارات');
+        return;
+    }
+    try {
+        const result = await Notification.requestPermission();
+        updateBrowserNotifButton();
+        if (result === 'granted') {
+            showAdminToast('تم تفعيل تنبيهات المتصفح', 'سيصلك إشعار فوري عند كل طلب جديد أو تحديث', 'new');
+            new Notification('تفاحة — لوحة الإدارة', {
+                body: 'تم تفعيل تنبيهات الطلبات بنجاح',
+                icon: ADMIN_ICON_URL,
+            });
+        } else {
+            showCustomAlert('لم يتم تفعيل الإشعارات — اسمح لها من إعدادات المتصفح');
+        }
+    } catch {
+        showCustomAlert('تعذر طلب إذن الإشعارات');
+    }
+};
+
+function showAdminToast(title, body, type = 'new') {
+    const toast = document.createElement('div');
+    toast.className = `admin-toast admin-toast-${type}`;
+    toast.innerHTML = `
+        <div class="admin-toast-title">${escapeHtml(title)}</div>
+        <div class="admin-toast-body">${escapeHtml(body)}</div>
+    `;
+    document.body.appendChild(toast);
+
+    if (!document.getElementById('alert-styles')) {
+        const style = document.createElement('style');
+        style.id = 'alert-styles';
+        style.innerHTML = `
+            @keyframes dropDown { 0% { top: -100px; opacity: 0; } 100% { top: 20px; opacity: 1; } }
+            @keyframes fadeOutUp { 0% { top: 20px; opacity: 1; } 100% { top: -100px; opacity: 0; } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    setTimeout(() => {
+        toast.style.animation = 'fadeOutUp 0.5s ease forwards';
+        setTimeout(() => toast.remove(), 500);
+    }, 5000);
+}
+
+function playAdminAlertSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.value = 0.08;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+    } catch {
+        // تجاهل — قد يحتاج تفاعل المستخدم أولاً
+    }
+}
+
+function showAdminBrowserNotification({ title, body, tabId = 'orders' }) {
+    showAdminToast(title, body, tabId === 'orders' ? 'new' : 'update');
+    playAdminAlertSound();
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            const notification = new Notification(title, {
+                body,
+                icon: ADMIN_ICON_URL,
+                badge: ADMIN_ICON_URL,
+                tag: `tufaha-admin-${Date.now()}`,
+                requireInteraction: true,
+            });
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+                switchTab(tabId);
+            };
+        } catch {
+            // المتصفح قد يمنع الإشعار
+        }
+    }
+}
+
+function refreshVisibleOrdersTab() {
+    const ordersTab = document.getElementById('orders');
+    const acceptedTab = document.getElementById('accepted-orders');
+    if (ordersTab?.classList.contains('active')) loadOrders('pending');
+    if (acceptedTab?.classList.contains('active')) loadOrders('accepted');
+}
+
+function startOrderRealtimeAlerts() {
+    stopOrderRealtimeAlerts();
+    ordersAlertsReady = false;
+    ordersState.clear();
+    updateBrowserNotifButton();
+
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission()
+            .then(() => updateBrowserNotifButton())
+            .catch(() => {});
+    }
+
+    ordersUnsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+        const pendingCount = snapshot.docs.filter(
+            (docSnap) => (docSnap.data().status || 'pending') === 'pending'
+        ).length;
+        updatePendingBadgeFromCount(pendingCount);
+        lastPendingCount = pendingCount;
+
+        if (!ordersAlertsReady) {
+            snapshot.docs.forEach((docSnap) => {
+                ordersState.set(docSnap.id, docSnap.data().status || 'pending');
+            });
+            ordersAlertsReady = true;
+            refreshVisibleOrdersTab();
+            return;
+        }
+
+        let shouldRefresh = false;
+
+        snapshot.docChanges().forEach((change) => {
+            const data = change.doc.data();
+            const id = change.doc.id;
+            const status = data.status || 'pending';
+            const customerName = data.name || 'زبون';
+            const total = `${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع`;
+
+            if (change.type === 'added' && status === 'pending') {
+                showAdminBrowserNotification({
+                    title: '📦 طلب جديد',
+                    body: `${customerName} — ${total}`,
+                    tabId: 'orders',
+                });
+                shouldRefresh = true;
+            } else if (change.type === 'modified') {
+                const prevStatus = ordersState.get(id);
+                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id)) {
+                    showAdminBrowserNotification({
+                        title: '🔄 تحديث طلب',
+                        body: `${customerName}: ${getOrderStatusLabel(prevStatus)} → ${getOrderStatusLabel(status)}`,
+                        tabId: status === 'pending' ? 'orders' : 'accepted-orders',
+                    });
+                    shouldRefresh = true;
+                }
+            } else if (change.type === 'removed') {
+                shouldRefresh = true;
+            }
+
+            if (change.type === 'removed') {
+                ordersState.delete(id);
+            } else {
+                ordersState.set(id, status);
+            }
+        });
+
+        if (shouldRefresh) refreshVisibleOrdersTab();
+    }, (error) => {
+        console.warn('orders listener failed', error);
+    });
+}
+
+function stopOrderRealtimeAlerts() {
+    if (ordersUnsubscribe) {
+        ordersUnsubscribe();
+        ordersUnsubscribe = null;
+    }
+    ordersAlertsReady = false;
+    ordersState.clear();
+    locallyUpdatedOrders.clear();
+    updatePendingBadgeFromCount(0);
+}
 
 // === أوقات العمل ===
 window.loadStoreSettings = async () => {
@@ -817,6 +1026,10 @@ window.loadOrders = async (status) => {
             status === 'pending' ? 'fa-inbox' : 'fa-truck',
             status === 'pending' ? 'لا توجد طلبات قيد الانتظار' : 'لا توجد طلبات نشطة'
         );
+        if (status === 'pending') {
+            lastPendingCount = 0;
+            updatePendingBadgeFromCount(0);
+        }
         return;
     }
     snapshot.forEach(docSnap => {
@@ -850,11 +1063,19 @@ window.loadOrders = async (status) => {
             <div class="order-actions">${buildOrderActionButtons(docSnap.id, data.status, status)}</div>
         </div>`;
     });
+
+    if (status === 'pending') {
+        lastPendingCount = snapshot.size;
+        updatePendingBadgeFromCount(snapshot.size);
+    }
 };
 
 window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => {
     const orderSnap = await getDoc(doc(db, "orders", id));
     const orderData = orderSnap.data() || {};
+
+    locallyUpdatedOrders.add(id);
+    setTimeout(() => locallyUpdatedOrders.delete(id), 4000);
 
     await updateDoc(doc(db, "orders", id), {
         status: nextStatus,
@@ -1007,12 +1228,118 @@ window.sendBroadcastNotification = async () => {
         document.getElementById('broadcast-title').value = '';
         document.getElementById('broadcast-body').value = '';
         loadPushTokenStats();
+        loadNotificationsHistory();
     } catch (e) {
         showCustomAlert(e.message || 'تعذر إرسال الإشعار');
     } finally {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال للجميع';
+        }
+    }
+};
+
+window.loadNotificationsHistory = async () => {
+    const list = document.getElementById('notifications-history-list');
+    if (!list) return;
+    list.innerHTML = loadingState();
+
+    try {
+        const snap = await getDocs(collection(db, 'notifications'));
+        const items = [];
+        snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
+
+        items.sort((a, b) => {
+            const ta = a.createdAt?.seconds
+                ? a.createdAt.seconds * 1000
+                : new Date(a.createdAt || 0).getTime();
+            const tb = b.createdAt?.seconds
+                ? b.createdAt.seconds * 1000
+                : new Date(b.createdAt || 0).getTime();
+            return tb - ta;
+        });
+
+        if (!items.length) {
+            list.innerHTML = emptyState('fa-bell', 'لا توجد إشعارات مرسلة بعد');
+            return;
+        }
+
+        list.innerHTML = items.slice(0, 50).map((n) => {
+            const tag = n.broadcast
+                ? { cls: 'broadcast', label: 'الجميع' }
+                : n.orderId
+                    ? { cls: 'order', label: 'طلب' }
+                    : { cls: 'user', label: 'مستخدم' };
+            const recipient = n.broadcast
+                ? 'جميع المستخدمين'
+                : [n.phone, n.email].filter(Boolean).join(' · ') || '—';
+
+            return `<div class="notification-history-item">
+                <div class="notification-history-head">
+                    <div class="notification-history-title">${escapeHtml(n.title || 'إشعار')}</div>
+                    <span class="notification-history-tag ${tag.cls}">${tag.label}</span>
+                </div>
+                <div class="notification-history-body">${escapeHtml(n.body || '')}</div>
+                <div class="notification-history-meta">
+                    <span>المستلم: ${escapeHtml(recipient)}</span>
+                    · <span>${formatOrderDateTime(n.createdAt)}</span>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        list.innerHTML = `<div class="order-meta">تعذر تحميل سجل الإشعارات</div>`;
+    }
+};
+
+window.sendUserNotification = async () => {
+    const email = document.getElementById('user-notif-email')?.value?.trim().toLowerCase() || '';
+    const phone = document.getElementById('user-notif-phone')?.value?.trim() || '';
+    const title = document.getElementById('user-notif-title')?.value?.trim();
+    const body = document.getElementById('user-notif-body')?.value?.trim();
+
+    if (!email && !phone) {
+        showCustomAlert('أدخل البريد أو رقم الهاتف');
+        return;
+    }
+    if (!title || !body) {
+        showCustomAlert('أدخل عنوان ونص الإشعار');
+        return;
+    }
+
+    const btn = document.getElementById('btn-send-user-notif');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
+    }
+
+    try {
+        await createInAppNotification({ email, phone, title, body });
+
+        const pushResult = await pushToUser({
+            email,
+            phone,
+            title,
+            body,
+            data: {},
+        });
+
+        showCustomAlert(
+            pushResult.sent > 0
+                ? `تم إرسال الإشعار إلى ${pushResult.sent} جهاز`
+                : 'تم حفظ الإشعار داخل التطبيق — لا يوجد جهاز مسجّل لهذا المستخدم'
+        );
+
+        document.getElementById('user-notif-email').value = '';
+        document.getElementById('user-notif-phone').value = '';
+        document.getElementById('user-notif-title').value = '';
+        document.getElementById('user-notif-body').value = '';
+        loadNotificationsHistory();
+    } catch (e) {
+        showCustomAlert(e.message || 'تعذر إرسال الإشعار');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال للمستخدم';
         }
     }
 };
