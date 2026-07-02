@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "662162908373-gnpct2t5j9oo074h2k8he7qnh5v6ac0i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tofahastore.app",
+            "certificate_hash": "b4d3fa6075d3ca1d22fade8c7dbab5afaaecb509"
+          }
+        },
+        {
           "client_id": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
           "client_type": 3
         }
