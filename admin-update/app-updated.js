@@ -23,23 +23,39 @@ const db = getFirestore(app);
 const ADMIN_ICON_URL = `${window.location.origin}/assets/icon.png`;
 let allProducts = [];
 
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_PUSH_API = `${window.location.origin}/api/expo-push`;
 
-async function sendExpoPushBatch(messages) {
-    if (!messages.length) return { sent: 0, errors: 0 };
-    const response = await fetch(EXPO_PUSH_URL, {
+async function sendExpoPushViaServer({ title, body, tokens, data = {}, channelId = 'orders' }) {
+    const uniqueTokens = [...new Set((tokens || []).filter(Boolean))];
+    if (!uniqueTokens.length) return { sent: 0, errors: 0 };
+
+    const response = await fetch(EXPO_PUSH_API, {
         method: 'POST',
         headers: {
             Accept: 'application/json',
-            'Accept-encoding': 'gzip, deflate',
             'Content-Type': 'application/json',
+            'x-notify-secret': ADMIN_NOTIFY_SECRET,
         },
-        body: JSON.stringify(messages),
+        body: JSON.stringify({
+            title,
+            body,
+            data,
+            tokens: uniqueTokens,
+            channelId,
+        }),
     });
-    const data = await response.json();
-    const tickets = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [data];
-    const errors = tickets.filter((ticket) => ticket?.status === 'error').length;
-    return { sent: messages.length - errors, errors };
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) {
+        const err = result.error || `expo_push_${response.status}`;
+        throw new Error(
+            err === 'unauthorized'
+                ? 'فشل التحقق من API — تأكد من ADMIN_NOTIFY_SECRET على Vercel'
+                : `تعذر إرسال Push: ${err}`
+        );
+    }
+
+    return { sent: result.sent || 0, errors: result.errors || 0 };
 }
 
 async function fetchAllPushTokens() {
@@ -72,28 +88,11 @@ async function fetchPushTokensForUser(email, phone) {
     return [...new Set(tokens)];
 }
 
-async function deliverExpoPush({ title, body, tokens, data = {} }) {
+async function deliverExpoPush({ title, body, tokens, data = {}, channelId = 'orders' }) {
     const uniqueTokens = [...new Set((tokens || []).filter(Boolean))];
     if (!uniqueTokens.length) return { sent: 0, errors: 0 };
 
-    const messages = uniqueTokens.map((to) => ({
-        to,
-        title,
-        body,
-        data,
-        sound: 'default',
-        channelId: 'orders',
-    }));
-
-    let sent = 0;
-    let errors = 0;
-    for (let i = 0; i < messages.length; i += 100) {
-        const chunk = messages.slice(i, i + 100);
-        const result = await sendExpoPushBatch(chunk);
-        sent += result.sent;
-        errors += result.errors;
-    }
-    return { sent, errors };
+    return sendExpoPushViaServer({ title, body, tokens: uniqueTokens, data, channelId });
 }
 
 async function pushToUser({ email, phone, title, body, data }) {
@@ -101,9 +100,9 @@ async function pushToUser({ email, phone, title, body, data }) {
     return deliverExpoPush({ title, body, tokens, data });
 }
 
-async function pushToAllUsers({ title, body, data }) {
+async function pushToAllUsers({ title, body, data, channelId = 'orders' }) {
     const tokens = await fetchAllPushTokens();
-    return deliverExpoPush({ title, body, tokens, data });
+    return deliverExpoPush({ title, body, tokens, data, channelId });
 }
 
 async function createInAppNotification(payload) {
@@ -378,6 +377,7 @@ function enterAdminDashboard(initialTab = 'orders') {
         app.style.display = 'block';
         switchTab(initialTab);
         startOrderRealtimeAlerts();
+        updatePwaInstallButtons();
         if ('Notification' in window && Notification.permission === 'granted') {
             setupWebPushNotifications().catch((error) => {
                 console.warn('[WebPush] restore failed', error);
@@ -484,26 +484,88 @@ const ADMIN_NOTIFY_API = `${window.location.origin}/api/notify-order`;
 
 let deferredPwaInstall = null;
 
+function isPwaInstalled() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: fullscreen)').matches
+        || window.navigator.standalone === true;
+}
+
+function isIosDevice() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function isMobileDevice() {
+    return isIosDevice() || /android/i.test(navigator.userAgent);
+}
+
+function updatePwaInstallButtons() {
+    const show = !isPwaInstalled() && (deferredPwaInstall || isMobileDevice() || 'serviceWorker' in navigator);
+    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-panel').forEach((btn) => {
+        btn.classList.toggle('hidden', !show);
+    });
+}
+
+async function registerPwaServiceWorker() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+        const registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        return registration;
+    } catch (error) {
+        console.warn('[PWA] service worker register failed', error);
+        return null;
+    }
+}
+
 window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     deferredPwaInstall = event;
-    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-panel').forEach((btn) => {
-        btn.classList.remove('hidden');
-    });
+    updatePwaInstallButtons();
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredPwaInstall = null;
+    updatePwaInstallButtons();
+    showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
 });
 
 window.installPwaApp = async () => {
-    if (!deferredPwaInstall) {
-        showCustomAlert('ثبّت التطبيق من قائمة المتصفح: Add to Home Screen / تثبيت');
+    if (isPwaInstalled()) {
+        showCustomAlert('التطبيق مثبّت بالفعل — افتحه من أيقونة تفاحة على الشاشة الرئيسية');
         return;
     }
-    deferredPwaInstall.prompt();
-    const { outcome } = await deferredPwaInstall.userChoice;
-    deferredPwaInstall = null;
-    if (outcome === 'accepted') {
-        showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
+
+    if (deferredPwaInstall) {
+        deferredPwaInstall.prompt();
+        const { outcome } = await deferredPwaInstall.userChoice;
+        deferredPwaInstall = null;
+        updatePwaInstallButtons();
+        if (outcome === 'accepted') {
+            showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
+        }
+        return;
     }
+
+    if (isIosDevice()) {
+        showCustomAlert(
+            'تثبيت على الآيفون:\n\n' +
+            '① اضغط زر المشاركة ⬆️ أسفل الشاشة\n' +
+            '② اختر «إضافة إلى الشاشة الرئيسية»\n' +
+            '③ افتح التطبيق من أيقونة تفاحة 🍎'
+        );
+        return;
+    }
+
+    showCustomAlert(
+        'تثبيت التطبيق:\n\n' +
+        'من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» أو «Add to Home screen»\n\n' +
+        'بعد التثبيت تظهر أيقونة تفاحة على شاشتك الرئيسية.'
+    );
 };
+
+registerPwaServiceWorker().then(() => {
+    updatePwaInstallButtons();
+});
 
 async function sendAdminPushNotify({ title, body, data = {} }) {
     if (!ADMIN_NOTIFY_SECRET) return { ok: false, error: 'missing_secret' };
@@ -1223,14 +1285,14 @@ window.loadOrders = async (status) => {
         list.innerHTML += `<div class="card-3d order-card">
             <div class="order-card-header">
                 <div>
-                    <div class="card-title" style="text-align:right;margin-bottom:4px">${escapeHtml(data.name)}</div>
+                    <div class="card-title order-customer-name">${escapeHtml(data.name)}</div>
                     <div class="order-meta"><i class="fa-solid fa-phone"></i> ${escapeHtml(data.phone)}</div>
                 </div>
                 <span class="order-status ${statusClass}">${getOrderStatusLabel(data.status)}</span>
             </div>
             ${addressHtml}
             <div class="order-meta"><strong>تاريخ الطلب:</strong> ${formatOrderDateTime(data.createdAt)}</div>
-            ${data.isScheduled && data.scheduledAt ? `<div class="order-meta" style="color:#2B7340;font-weight:700"><strong>⏰ توصيل مجدول:</strong> ${formatOrderDateTime(data.scheduledAt)}</div>` : ''}
+            ${data.isScheduled && data.scheduledAt ? `<div class="order-meta order-scheduled"><strong>⏰ توصيل مجدول:</strong> ${formatOrderDateTime(data.scheduledAt)}</div>` : ''}
             ${data.statusUpdatedAt ? `<div class="order-meta"><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : ''}
             <div class="order-items">${itemsHtml || '<div class="order-meta">لا توجد تفاصيل</div>'}</div>
             <div class="order-total">الإجمالي: ${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع</div>
@@ -1352,9 +1414,9 @@ window.loadPushTokenStats = async () => {
         });
 
         statsEl.innerHTML = `
-            <div class="sales-card card-3d" style="margin-bottom:1rem">
+            <div class="sales-card card-3d push-stats-card">
                 <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة مسجّلة للإشعارات</h3>
-                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;margin-top:1rem">
+                <div class="stats-mini-grid">
                     <div><strong>${counts.total}</strong><div class="order-meta">زبائن (إجمالي)</div></div>
                     <div><strong>${counts.adminWebPush}</strong><div class="order-meta">أدمن Web Push</div></div>
                     <div><strong>${counts.android}</strong><div class="order-meta">أندرويد</div></div>
@@ -1393,6 +1455,7 @@ window.sendBroadcastNotification = async () => {
             title,
             body,
             data: { broadcast: 'true' },
+            channelId: 'general',
         });
 
         showCustomAlert(

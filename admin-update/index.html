@@ -2,11 +2,12 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="لوحة إدارة متجر تفاحة — إدارة الطلبات والمنتجات والإشعارات" />
-  <meta name="theme-color" content="#EEF5FC" />
+  <meta name="theme-color" content="#3D9B4F" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="تفاحة" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>تفاحة — لوحة الإدارة</title>
   <link rel="icon" type="image/png" href="/assets/icon.png" />
@@ -99,26 +100,29 @@
       <!-- المحتوى الرئيسي -->
       <div class="main-area">
         <header class="topbar">
-          <div style="display:flex;align-items:center;gap:0.75rem">
+          <div class="topbar-start">
             <button class="menu-toggle" onclick="toggleSidebar(true)" aria-label="القائمة">
               <i class="fa-solid fa-bars"></i>
             </button>
             <img src="/assets/icon.png" alt="" class="brand-logo brand-logo-xs topbar-logo" width="36" height="36" aria-hidden="true" />
-            <div>
+            <div class="topbar-titles">
               <div class="topbar-title" id="page-title">طلبات قيد الانتظار</div>
               <div class="topbar-sub" id="page-sub">إدارة طلبات الزبائن</div>
             </div>
           </div>
           <div class="topbar-actions">
-            <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" data-web-push-btn onclick="requestAdminBrowserNotifications()">
-              <i class="fa-solid fa-bell"></i> تفعيل Web Push
+            <button type="button" id="enable-browser-notif-btn" class="notif-enable-btn hidden" data-web-push-btn onclick="requestAdminBrowserNotifications()" title="تفعيل Web Push">
+              <i class="fa-solid fa-bell"></i>
+              <span class="topbar-btn-label">تفعيل Web Push</span>
             </button>
-            <button type="button" id="pwa-install-btn" class="pwa-install-btn hidden" onclick="installPwaApp()">
-              <i class="fa-solid fa-download"></i> تثبيت التطبيق
+            <button type="button" id="pwa-install-btn" class="pwa-install-btn hidden" onclick="installPwaApp()" title="تثبيت لوحة تفاحة على الجهاز">
+              <img src="/assets/icon.png" alt="" class="pwa-install-logo" width="22" height="22" />
+              <span class="topbar-btn-label">تثبيت التطبيق</span>
             </button>
             <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
-            <button type="button" class="logout-btn" onclick="logoutAdmin()">
-              <i class="fa-solid fa-right-from-bracket"></i> خروج
+            <button type="button" class="logout-btn" onclick="logoutAdmin()" title="تسجيل الخروج">
+              <i class="fa-solid fa-right-from-bracket"></i>
+              <span class="topbar-btn-label">خروج</span>
             </button>
           </div>
         </header>
@@ -349,17 +353,22 @@
               <p class="order-meta" style="margin-bottom:1rem">
                 ① فعّل الإشعارات ② ثبّت PWA ③ اضغط اختبار ④ أغلق التطبيق ⑤ أرسل طلب من موبايل آخر
               </p>
-              <div style="display:flex;flex-wrap:wrap;gap:0.75rem">
+              <div class="action-row">
                 <button type="button" class="btn-primary" data-web-push-btn onclick="requestAdminBrowserNotifications()">
                   <i class="fa-solid fa-bell"></i> تفعيل Web Push
                 </button>
-                <button type="button" id="pwa-install-btn-panel" class="btn-primary" style="background:#1976d2" onclick="installPwaApp()">
-                  <i class="fa-solid fa-download"></i> تثبيت PWA
-                </button>
-                <button type="button" class="btn-primary" style="background:#2e7d32" onclick="testAdminWebPush()">
+                <button type="button" class="btn-primary btn-success" onclick="testAdminWebPush()">
                   <i class="fa-solid fa-vial"></i> اختبار الإشعار
                 </button>
               </div>
+              <button type="button" id="pwa-install-btn-panel" class="pwa-install-panel-btn hidden" onclick="installPwaApp()">
+                <img src="/assets/icon.png" alt="تفاحة" class="pwa-install-panel-logo" width="40" height="40" />
+                <span class="pwa-install-panel-text">
+                  <strong>تثبيت تطبيق تفاحة</strong>
+                  <small>افتح اللوحة من الشاشة الرئيسية بأيقونة المتجر</small>
+                </span>
+                <i class="fa-solid fa-download" aria-hidden="true"></i>
+              </button>
             </div>
 
             <div class="panel" style="opacity:0.85">
@@ -398,7 +407,7 @@
                 </div>
                 <div class="form-field full">
                   <label for="user-notif-body">نص الإشعار</label>
-                  <textarea id="user-notif-body" rows="3" placeholder="اكتب رسالة الإشعار..." style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid #e5e7eb;font-family:inherit"></textarea>
+                  <textarea id="user-notif-body" rows="3" placeholder="اكتب رسالة الإشعار..."></textarea>
                 </div>
               </div>
               <button id="btn-send-user-notif" class="btn-primary" onclick="sendUserNotification()">
@@ -420,7 +429,7 @@
               </div>
               <div class="form-field">
                 <label for="broadcast-body">نص الإشعار</label>
-                <textarea id="broadcast-body" rows="3" placeholder="اكتب رسالة الإشعار هنا..." style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid #e5e7eb;font-family:inherit"></textarea>
+                <textarea id="broadcast-body" rows="3" placeholder="اكتب رسالة الإشعار هنا..."></textarea>
               </div>
               <button id="btn-send-broadcast" class="btn-primary" onclick="sendBroadcastNotification()">
                 <i class="fa-solid fa-paper-plane"></i> إرسال للجميع
@@ -501,9 +510,11 @@
       if (open) {
         sidebar.classList.add('open');
         overlay?.classList.add('visible');
+        document.body.style.overflow = 'hidden';
       } else {
         sidebar.classList.remove('open');
         overlay?.classList.remove('visible');
+        document.body.style.overflow = '';
       }
     };
   </script>

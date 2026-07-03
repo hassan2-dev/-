@@ -21,6 +21,8 @@
     "submit:ios": "eas submit --platform ios --latest --profile production",
     "build:android": "eas build --platform android --profile production",
     "build:android:apk": "eas build --platform android --profile preview",
+    "notify:welcome": "node scripts/send-welcome-broadcast.js",
+    "notify:welcome:dry": "node scripts/send-welcome-broadcast.js --dry-run",
     "submit:android": "eas submit --platform android --latest --profile production"
   },
   "dependencies": {
