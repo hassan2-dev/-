@@ -364,8 +364,8 @@
               <button type="button" id="pwa-install-btn-panel" class="pwa-install-panel-btn hidden" onclick="installPwaApp()">
                 <img src="/assets/icon.png" alt="تفاحة" class="pwa-install-panel-logo" width="40" height="40" />
                 <span class="pwa-install-panel-text">
-                  <strong>تثبيت تطبيق تفاحة — ضغطة واحدة</strong>
-                  <small>على أندرويد/كروم يثبّت مباشرة. على الآيفون يظهر شرح سريع.</small>
+                  <strong>تثبيت تطبيق تفاحة</strong>
+                  <small>على أندرويد: ضغطة واحدة. على الآيفون: من تبويب الإشعارات.</small>
                 </span>
                 <i class="fa-solid fa-download" aria-hidden="true"></i>
               </button>
@@ -499,14 +499,14 @@
         <i class="fa-solid fa-download"></i>
         <span id="pwa-install-modal-btn-text">تثبيت الآن</span>
       </button>
-      <button type="button" class="pwa-install-modal-later" onclick="closePwaInstallModal(true)">لاحقاً</button>
+      <button type="button" class="pwa-install-modal-later" onclick="closePwaInstallModal()">لاحقاً</button>
     </div>
   </div>
 
   <!-- زر تثبيت عائم -->
   <button type="button" id="pwa-install-fab" class="pwa-install-fab hidden" onclick="installPwaApp()" title="تثبيت التطبيق">
     <img src="/assets/icon.png" alt="" width="28" height="28" />
-    <span>تثبيت التطبيق</span>
+    <span>تثبيت الآن</span>
   </button>
 
   <script>

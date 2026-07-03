@@ -1,5 +1,12 @@
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  const CACHE = 'tufaha-admin-v1';
+  const SHELL = ['/', '/index.html', '/admin.css', '/manifest.webmanifest', '/assets/icon.png'];
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {

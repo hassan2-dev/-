@@ -663,6 +663,15 @@ body {
   display: none;
 }
 
+.pwa-install-fab.is-loading {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.pwa-install-fab.is-loading span::after {
+  content: '...';
+}
+
 .admin-toast {
   position: fixed;
   top: 20px;
