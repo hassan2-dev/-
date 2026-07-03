@@ -32,13 +32,23 @@ self.addEventListener('push', (event) => {
   const tag = orderId ? `tufaha-new-${orderId}` : 'tufaha-admin';
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon,
-      badge: icon,
-      data: payload.data || {},
-      tag,
-      renotify: false,
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const dashboardVisible = clientList.some(
+        (client) =>
+          client.visibilityState === 'visible' &&
+          client.url &&
+          new URL(client.url).origin === self.location.origin
+      );
+      if (dashboardVisible) return;
+
+      return self.registration.showNotification(title, {
+        body,
+        icon,
+        badge: icon,
+        data: payload.data || {},
+        tag,
+        renotify: false,
+      });
     })
   );
 });

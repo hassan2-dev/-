@@ -11,7 +11,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 import { FIREBASE_CONFIG, ADMIN_NOTIFY_SECRET } from './firebase-config.js';
-import { initAdminFcm, isAdminFcmReady } from './fcm-admin.js';
 import { initWebPush, isWebPushReady, describeWebPushFailure } from './web-push-admin.js';
 
 const CONFIG = {
@@ -793,20 +792,7 @@ window.testAdminWebPush = async () => {
 };
 
 window.setupAdminFcmLegacy = async () => {
-    const result = await initAdminFcm(app, db, {
-        onForegroundMessage: ({ title, body, type }) => {
-            showAdminToast(title, body, type === 'update' ? 'update' : 'new');
-        },
-    });
-    if (result.ok) {
-        showAdminToast('تم تفعيل Firebase FCM', 'يحتاج Blaze + Cloud Functions للإشعارات بالخلفية', 'new');
-        return;
-    }
-    if (result.reason === 'denied') {
-        showCustomAlert('اسمح بالإشعارات من إعدادات المتصفح');
-        return;
-    }
-    showCustomAlert(result.detail || 'تعذر تفعيل Firebase — استخدم Web Push أعلاه');
+    showCustomAlert('استخدم Web Push أعلاه — Firebase FCM معطّل لتجنّب تكرار الإشعارات');
 };
 
 function updatePwaStatusBanner(result) {
@@ -874,6 +860,9 @@ function playAdminAlertSound() {
 function showAdminBrowserNotification({ title, body, tabId = 'orders', orderId = '', notifTag = '' }) {
     showAdminToast(title, body, tabId === 'orders' ? 'new' : 'update');
     playAdminAlertSound();
+
+    // الداشبورد مفتوح — Toast + صوت فقط (بدون إشعار نظام ثاني)
+    if (!document.hidden) return;
 
     if ('Notification' in window && Notification.permission === 'granted') {
         try {

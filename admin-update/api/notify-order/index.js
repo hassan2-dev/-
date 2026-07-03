@@ -87,6 +87,14 @@ async function handler(req, res) {
       return sendJson(res, 200, { ok: true, sent: 0, message: 'no_subscriptions' });
     }
 
+    const seenEndpoints = new Set();
+    const uniqueSubscriptions = subscriptions.filter((subscription) => {
+      const endpoint = subscription?.endpoint;
+      if (!endpoint || seenEndpoints.has(endpoint)) return false;
+      seenEndpoints.add(endpoint);
+      return true;
+    });
+
     const payload = JSON.stringify({
       title,
       body: text,
@@ -97,7 +105,7 @@ async function handler(req, res) {
     let sent = 0;
     let failed = 0;
 
-    for (const subscription of subscriptions) {
+    for (const subscription of uniqueSubscriptions) {
       try {
         await webpush.sendNotification(subscription, payload);
         sent += 1;
