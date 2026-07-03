@@ -16,7 +16,7 @@
       "backgroundColor": "#EEF5FC"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.tofahastore.app",
       "appleTeamId": "P486YA4QZB",
       "icon": "./assets/icon.png",
