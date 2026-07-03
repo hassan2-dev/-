@@ -364,8 +364,8 @@
               <button type="button" id="pwa-install-btn-panel" class="pwa-install-panel-btn hidden" onclick="installPwaApp()">
                 <img src="/assets/icon.png" alt="تفاحة" class="pwa-install-panel-logo" width="40" height="40" />
                 <span class="pwa-install-panel-text">
-                  <strong>تثبيت تطبيق تفاحة</strong>
-                  <small>افتح اللوحة من الشاشة الرئيسية بأيقونة المتجر</small>
+                  <strong>تثبيت تطبيق تفاحة — ضغطة واحدة</strong>
+                  <small>على أندرويد/كروم يثبّت مباشرة. على الآيفون يظهر شرح سريع.</small>
                 </span>
                 <i class="fa-solid fa-download" aria-hidden="true"></i>
               </button>
@@ -480,6 +480,34 @@
       </div>
     </div>
   </div>
+
+  <!-- نافذة تثبيت PWA -->
+  <div id="pwa-install-modal" class="pwa-install-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pwa-install-modal-title">
+    <div class="pwa-install-modal-backdrop" onclick="closePwaInstallModal()"></div>
+    <div class="pwa-install-modal-card">
+      <img src="/assets/icon.png" alt="تفاحة" class="pwa-install-modal-logo" width="72" height="72" />
+      <h2 id="pwa-install-modal-title">تثبيت تطبيق تفاحة</h2>
+      <p id="pwa-install-modal-desc" class="pwa-install-modal-desc">
+        ثبّت اللوحة على جهازك وافتحها مباشرة من الشاشة الرئيسية.
+      </p>
+      <div id="pwa-install-ios-steps" class="pwa-install-ios-steps hidden">
+        <div class="pwa-install-step"><span>①</span> اضغط زر المشاركة ⬆️ أسفل الشاشة</div>
+        <div class="pwa-install-step"><span>②</span> اختر «إضافة إلى الشاشة الرئيسية»</div>
+        <div class="pwa-install-step"><span>③</span> اضغط «إضافة» — تظهر أيقونة تفاحة 🍎</div>
+      </div>
+      <button type="button" id="pwa-install-modal-btn" class="pwa-install-modal-btn" onclick="installPwaApp()">
+        <i class="fa-solid fa-download"></i>
+        <span id="pwa-install-modal-btn-text">تثبيت الآن</span>
+      </button>
+      <button type="button" class="pwa-install-modal-later" onclick="closePwaInstallModal(true)">لاحقاً</button>
+    </div>
+  </div>
+
+  <!-- زر تثبيت عائم -->
+  <button type="button" id="pwa-install-fab" class="pwa-install-fab hidden" onclick="installPwaApp()" title="تثبيت التطبيق">
+    <img src="/assets/icon.png" alt="" width="28" height="28" />
+    <span>تثبيت التطبيق</span>
+  </button>
 
   <script>
     const PAGE_TITLES = {

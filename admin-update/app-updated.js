@@ -378,6 +378,7 @@ function enterAdminDashboard(initialTab = 'orders') {
         switchTab(initialTab);
         startOrderRealtimeAlerts();
         updatePwaInstallButtons();
+        maybeAutoShowInstallModal();
         if ('Notification' in window && Notification.permission === 'granted') {
             setupWebPushNotifications().catch((error) => {
                 console.warn('[WebPush] restore failed', error);
@@ -483,6 +484,8 @@ function updateBrowserNotifButton() {
 const ADMIN_NOTIFY_API = `${window.location.origin}/api/notify-order`;
 
 let deferredPwaInstall = null;
+const PWA_INSTALL_DISMISS_KEY = 'tufaha_pwa_install_dismiss';
+let installPromptWaiters = [];
 
 function isPwaInstalled() {
     return window.matchMedia('(display-mode: standalone)').matches
@@ -494,14 +497,96 @@ function isIosDevice() {
     return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
-function isMobileDevice() {
-    return isIosDevice() || /android/i.test(navigator.userAgent);
+function canNativePwaInstall() {
+    return !!deferredPwaInstall;
 }
 
 function updatePwaInstallButtons() {
-    const show = !isPwaInstalled() && (deferredPwaInstall || isMobileDevice() || 'serviceWorker' in navigator);
-    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-panel').forEach((btn) => {
+    const installed = isPwaInstalled();
+    const show = !installed;
+    const nativeReady = canNativePwaInstall();
+
+    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-panel, #pwa-install-fab').forEach((btn) => {
         btn.classList.toggle('hidden', !show);
+    });
+
+    const fabLabel = document.querySelector('#pwa-install-fab span');
+    if (fabLabel) {
+        fabLabel.textContent = nativeReady ? 'تثبيت الآن' : (isIosDevice() ? 'تثبيت على الشاشة' : 'تثبيت التطبيق');
+    }
+
+    const topbarLabel = document.querySelector('#pwa-install-btn .topbar-btn-label');
+    if (topbarLabel) {
+        topbarLabel.textContent = nativeReady ? 'تثبيت الآن' : 'تثبيت التطبيق';
+    }
+}
+
+function setInstallModalState({ loading = false, ios = false, manual = false } = {}) {
+    const modal = document.getElementById('pwa-install-modal');
+    const desc = document.getElementById('pwa-install-modal-desc');
+    const iosSteps = document.getElementById('pwa-install-ios-steps');
+    const btn = document.getElementById('pwa-install-modal-btn');
+    const btnText = document.getElementById('pwa-install-modal-btn-text');
+    if (!modal || !desc || !iosSteps || !btn || !btnText) return;
+
+    iosSteps.classList.toggle('hidden', !ios);
+    btn.disabled = loading;
+
+    if (loading) {
+        desc.textContent = 'جاري تجهيز التثبيت...';
+        btnText.textContent = 'انتظر قليلاً...';
+        return;
+    }
+    if (ios) {
+        desc.textContent = 'آبل ما تسمح بالتثبيت التلقائي — اتبع الخطوات:';
+        btnText.textContent = 'فهمت';
+        return;
+    }
+    if (manual) {
+        desc.textContent = 'افتح قائمة المتصفح (⋮) واختر «تثبيت التطبيق» أو «Add to Home screen».';
+        btnText.textContent = 'حسناً';
+        return;
+    }
+    desc.textContent = 'اضغط الزر بالأسفل — راح يثبّت التطبيق مباشرة على جهازك.';
+    btnText.textContent = 'تثبيت الآن';
+}
+
+window.showPwaInstallModal = function showPwaInstallModal(mode = 'native') {
+    const modal = document.getElementById('pwa-install-modal');
+    if (!modal || isPwaInstalled()) return;
+    setInstallModalState(
+        mode === 'ios' ? { ios: true }
+            : mode === 'manual' ? { manual: true }
+                : {}
+    );
+    modal.classList.remove('hidden');
+};
+
+window.closePwaInstallModal = function closePwaInstallModal(dismiss = false) {
+    const modal = document.getElementById('pwa-install-modal');
+    if (modal) modal.classList.add('hidden');
+    if (dismiss) {
+        try { sessionStorage.setItem(PWA_INSTALL_DISMISS_KEY, '1'); } catch { /* ignore */ }
+    }
+};
+
+function maybeAutoShowInstallModal() {
+    if (isPwaInstalled() || !canNativePwaInstall()) return;
+    try {
+        if (sessionStorage.getItem(PWA_INSTALL_DISMISS_KEY) === '1') return;
+    } catch { /* ignore */ }
+    if (localStorage.getItem(ADMIN_SESSION_KEY) !== '1') return;
+    setTimeout(() => showPwaInstallModal('native'), 600);
+}
+
+function waitForInstallPrompt(timeoutMs = 5000) {
+    if (deferredPwaInstall) return Promise.resolve(deferredPwaInstall);
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), timeoutMs);
+        installPromptWaiters.push(() => {
+            clearTimeout(timer);
+            resolve(deferredPwaInstall);
+        });
     });
 }
 
@@ -510,6 +595,15 @@ async function registerPwaServiceWorker() {
     try {
         const registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
         await navigator.serviceWorker.ready;
+
+        if (registration.active && !navigator.serviceWorker.controller) {
+            const reloaded = sessionStorage.getItem('pwa_sw_reload');
+            if (!reloaded) {
+                sessionStorage.setItem('pwa_sw_reload', '1');
+                window.location.reload();
+                return registration;
+            }
+        }
         return registration;
     } catch (error) {
         console.warn('[PWA] service worker register failed', error);
@@ -520,25 +614,52 @@ async function registerPwaServiceWorker() {
 window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     deferredPwaInstall = event;
+    installPromptWaiters.forEach((fn) => fn(event));
+    installPromptWaiters = [];
     updatePwaInstallButtons();
+    maybeAutoShowInstallModal();
 });
 
 window.addEventListener('appinstalled', () => {
     deferredPwaInstall = null;
+    closePwaInstallModal();
     updatePwaInstallButtons();
     showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
 });
 
 window.installPwaApp = async () => {
     if (isPwaInstalled()) {
-        showCustomAlert('التطبيق مثبّت بالفعل — افتحه من أيقونة تفاحة على الشاشة الرئيسية');
+        showCustomAlert('التطبيق مثبّت — افتحه من أيقونة تفاحة على الشاشة الرئيسية');
         return;
     }
 
-    if (deferredPwaInstall) {
-        deferredPwaInstall.prompt();
-        const { outcome } = await deferredPwaInstall.userChoice;
+    const modal = document.getElementById('pwa-install-modal');
+    const modalOpen = modal && !modal.classList.contains('hidden');
+    const iosSteps = document.getElementById('pwa-install-ios-steps');
+    const iosMode = iosSteps && !iosSteps.classList.contains('hidden');
+
+    if (modalOpen && iosMode) {
+        closePwaInstallModal(true);
+        return;
+    }
+    if (modalOpen && document.getElementById('pwa-install-modal-btn-text')?.textContent === 'حسناً') {
+        closePwaInstallModal(true);
+        return;
+    }
+
+    let promptEvent = deferredPwaInstall;
+    if (!promptEvent) {
+        if (!modalOpen) showPwaInstallModal('native');
+        setInstallModalState({ loading: true });
+        promptEvent = await waitForInstallPrompt(5000);
+    }
+
+    if (promptEvent) {
+        setInstallModalState({});
+        await promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
         deferredPwaInstall = null;
+        closePwaInstallModal();
         updatePwaInstallButtons();
         if (outcome === 'accepted') {
             showAdminToast('تم تثبيت التطبيق', 'افتح تفاحة من الشاشة الرئيسية', 'new');
@@ -547,20 +668,13 @@ window.installPwaApp = async () => {
     }
 
     if (isIosDevice()) {
-        showCustomAlert(
-            'تثبيت على الآيفون:\n\n' +
-            '① اضغط زر المشاركة ⬆️ أسفل الشاشة\n' +
-            '② اختر «إضافة إلى الشاشة الرئيسية»\n' +
-            '③ افتح التطبيق من أيقونة تفاحة 🍎'
-        );
+        setInstallModalState({ ios: true });
+        if (!modalOpen) showPwaInstallModal('ios');
         return;
     }
 
-    showCustomAlert(
-        'تثبيت التطبيق:\n\n' +
-        'من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» أو «Add to Home screen»\n\n' +
-        'بعد التثبيت تظهر أيقونة تفاحة على شاشتك الرئيسية.'
-    );
+    setInstallModalState({ manual: true });
+    if (!modalOpen) showPwaInstallModal('manual');
 };
 
 registerPwaServiceWorker().then(() => {
