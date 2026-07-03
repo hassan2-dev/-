@@ -452,12 +452,27 @@ let ordersUnsubscribe = null;
 let ordersAlertsReady = false;
 const ordersState = new Map();
 const locallyUpdatedOrders = new Set();
-const recentOrderAlerts = new Set();
+const ADMIN_ALERTS_KEY = 'tufaha_admin_alerts_v1';
+
+function shouldAlertOnce(key) {
+    try {
+        const raw = sessionStorage.getItem(ADMIN_ALERTS_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        if (map[key]) return false;
+        map[key] = Date.now();
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        for (const k of Object.keys(map)) {
+            if (map[k] < cutoff) delete map[k];
+        }
+        sessionStorage.setItem(ADMIN_ALERTS_KEY, JSON.stringify(map));
+        return true;
+    } catch {
+        return true;
+    }
+}
 
 function alertOrderOnce(key, fn) {
-    if (recentOrderAlerts.has(key)) return;
-    recentOrderAlerts.add(key);
-    setTimeout(() => recentOrderAlerts.delete(key), 8000);
+    if (!shouldAlertOnce(key)) return;
     fn();
 }
 
@@ -856,18 +871,19 @@ function playAdminAlertSound() {
     }
 }
 
-function showAdminBrowserNotification({ title, body, tabId = 'orders' }) {
+function showAdminBrowserNotification({ title, body, tabId = 'orders', orderId = '', notifTag = '' }) {
     showAdminToast(title, body, tabId === 'orders' ? 'new' : 'update');
     playAdminAlertSound();
 
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
+            const tag = notifTag || (orderId ? `tufaha-order-${orderId}` : 'tufaha-admin');
             const notification = new Notification(title, {
                 body,
                 icon: ADMIN_ICON_URL,
                 badge: ADMIN_ICON_URL,
-                tag: `tufaha-admin-${Date.now()}`,
-                requireInteraction: true,
+                tag,
+                renotify: false,
             });
             notification.onclick = () => {
                 window.focus();
@@ -919,31 +935,23 @@ function startOrderRealtimeAlerts() {
             const total = `${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع`;
 
             if (change.type === 'added' && status === 'pending') {
-                alertOrderOnce(`snap-new-${id}`, () => {
+                alertOrderOnce(`new-order-${id}`, () => {
                     showAdminBrowserNotification({
                         title: '📦 طلب جديد',
                         body: `${customerName} — ${total}`,
                         tabId: 'orders',
+                        orderId: id,
+                        notifTag: `tufaha-new-${id}`,
                     });
-                    sendAdminPushNotify({
-                        title: '📦 طلب جديد',
-                        body: `${customerName} — ${total}`,
-                        data: { type: 'new_order', orderId: id },
-                    }).catch(() => {});
+                    // Web Push يُرسل مرة واحدة من تطبيق الزبون — لا نكرّره من الداشبورد
                 });
                 shouldRefresh = true;
             } else if (change.type === 'modified') {
                 const prevStatus = ordersState.get(id);
                 if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id)) {
-                    alertOrderOnce(`snap-upd-${id}-${status}`, () => {
-                        showAdminBrowserNotification({
-                            title: '🔄 تحديث طلب',
-                            body: `${customerName}: ${getOrderStatusLabel(prevStatus)} → ${getOrderStatusLabel(status)}`,
-                            tabId: status === 'pending' ? 'orders' : 'accepted-orders',
-                        });
-                    });
-                    shouldRefresh = true;
+                    // لا نُشعِر الأدمن بتحديثات الحالة — هو اللي يغيّرها من الداشبورد
                 }
+                if (prevStatus !== status) shouldRefresh = true;
             } else if (change.type === 'removed') {
                 shouldRefresh = true;
             }

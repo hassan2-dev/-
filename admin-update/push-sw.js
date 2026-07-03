@@ -28,6 +28,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'تفاحة — طلب جديد';
   const body = payload.body || 'راجع لوحة الإدارة';
   const icon = payload.icon || '/assets/icon.png';
+  const orderId = payload.data?.orderId || '';
+  const tag = orderId ? `tufaha-new-${orderId}` : 'tufaha-admin';
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -35,8 +37,8 @@ self.addEventListener('push', (event) => {
       icon,
       badge: icon,
       data: payload.data || {},
-      tag: payload.data?.orderId ? `order-${payload.data.orderId}` : 'tufaha-order',
-      requireInteraction: true,
+      tag,
+      renotify: false,
     })
   );
 });
