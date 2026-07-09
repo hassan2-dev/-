@@ -128,24 +128,70 @@ export async function fetchNotificationsForUser(
   const normalizedEmail = email?.trim().toLowerCase() || '';
   const normalizedPhone = phone?.trim() || '';
   if (!normalizedEmail && !normalizedPhone) return [];
+
+  const cacheKey = `cache_notifications_${normalizedEmail || normalizedPhone}`;
+  const tsKey = `cache_ts_notifications_${normalizedEmail || normalizedPhone}`;
+
+  let cached: any[] = [];
   try {
-    const { data: all } = await fetchCollectionCached('notifications', NOTIFICATIONS_CACHE_TTL_MS);
-    return all
-      .filter((n) => {
-        if (n.broadcast === true) return true;
-        const nEmail = String(n.email || '').trim().toLowerCase();
-        const nPhone = String(n.phone || '').trim();
-        return (
-          (normalizedEmail && nEmail === normalizedEmail) ||
-          (normalizedPhone && nPhone === normalizedPhone)
-        );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      );
+    const raw = await AsyncStorage.getItem(cacheKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) cached = parsed;
+    }
+  } catch (e) {}
+
+  let cacheTs = 0;
+  try {
+    const ts = await AsyncStorage.getItem(tsKey);
+    if (ts) cacheTs = Number(ts) || 0;
+  } catch (e) {}
+
+  if (cached.length > 0 && cacheTs > 0 && Date.now() - cacheTs < NOTIFICATIONS_CACHE_TTL_MS) {
+    return cached;
+  }
+
+  if (isFirestoreRateLimited() && cached.length > 0) {
+    return cached;
+  }
+
+  try {
+    const queries: Promise<{ data: any[]; ok: boolean }>[] = [
+      runQueryBooleanEqual('notifications', 'broadcast', true, 50),
+    ];
+    if (normalizedEmail) {
+      queries.push(runQueryEqual('notifications', 'email', normalizedEmail, 50));
+    }
+    if (normalizedPhone) {
+      queries.push(runQueryEqual('notifications', 'phone', normalizedPhone, 50));
+    }
+
+    const results = await Promise.all(queries);
+    if (results.every((r) => !r.ok) && cached.length > 0) {
+      return cached;
+    }
+
+    const byId = new Map<string, any>();
+    for (const { data } of results) {
+      for (const item of data) {
+        if (item?.id) byId.set(item.id, item);
+      }
+    }
+
+    const merged = [...byId.values()].sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    if (merged.length > 0) {
+      try {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(merged));
+        await AsyncStorage.setItem(tsKey, String(Date.now()));
+      } catch (e) {}
+    }
+
+    return merged.length > 0 ? merged : cached;
   } catch {
-    return [];
+    return cached;
   }
 }
 
@@ -393,7 +439,7 @@ export async function signInWithGoogleToken(
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const NOTIFICATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
 const ORDERS_CACHE_TTL_MS = 2 * 60 * 1000;
-const CACHED_COLLECTIONS = ['categories', 'products', 'banners', 'offers', 'notifications'];
+const CACHED_COLLECTIONS = ['categories', 'products', 'banners', 'offers'];
 const RETRY_COOLDOWN_MS = 90 * 1000;
 const RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
 const CACHE_SCHEMA_VERSION = '2';
@@ -651,6 +697,63 @@ export async function readCachedCollection(collectionName: string): Promise<any[
 // ============================================================
 // Incremental Sync (read-efficient)
 // ============================================================
+
+async function runQueryBooleanEqual(
+  collectionId: string,
+  fieldPath: string,
+  value: boolean,
+  limit = 25
+): Promise<{ data: any[]; ok: boolean }> {
+  return enqueueFirestore(async () => {
+    try {
+      if (isFirestoreRateLimited()) {
+        return { data: [], ok: false };
+      }
+
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const body = {
+        structuredQuery: {
+          from: [{ collectionId }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath },
+              op: 'EQUAL',
+              value: { booleanValue: value },
+            },
+          },
+          limit,
+        },
+      };
+
+      const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
+      const res = await fetchFirestoreUrl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!res || !res.ok) {
+        if (res?.status === 429) noteFirestoreRateLimit();
+        return { data: [], ok: false };
+      }
+
+      const json = await res.json();
+      const docs: any[] = [];
+      if (Array.isArray(json)) {
+        for (const row of json) {
+          if (row?.document) docs.push(parseFirestoreDoc(row.document));
+        }
+      }
+      return { data: docs, ok: true };
+    } catch (error) {
+      console.error(`runQueryBooleanEqual error ${collectionId}.${fieldPath}`, error);
+      return { data: [], ok: false };
+    }
+  });
+}
 
 async function runQueryEqual(
   collectionId: string,

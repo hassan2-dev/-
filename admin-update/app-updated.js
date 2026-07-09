@@ -9,7 +9,8 @@
 // ============================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 import { FIREBASE_CONFIG, ADMIN_NOTIFY_SECRET } from './firebase-config.js';
 import { initWebPush, isWebPushReady, describeWebPushFailure } from './web-push-admin.js';
 
@@ -18,6 +19,7 @@ const CONFIG = {
 };
 
 const app = initializeApp(CONFIG.FIREBASE_CONFIG);
+const auth = getAuth(app);
 const db = getFirestore(app);
 const ADMIN_ICON_URL = `${window.location.origin}/assets/icon.png`;
 let allProducts = [];
@@ -388,10 +390,41 @@ async function uploadImageGetUrl(file, maxWidth = 1000, quality = 0.8) {
 
 const ADMIN_SESSION_KEY = 'tufaha_admin_session_v1';
 
-function enterAdminDashboard(initialTab = 'orders') {
+let adminAuthReady = null;
+
+function ensureAdminFirebaseAuth() {
+    if (adminAuthReady) return adminAuthReady;
+    adminAuthReady = new Promise((resolve, reject) => {
+        const unsub = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                unsub();
+                resolve(user);
+                return;
+            }
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                unsub();
+                adminAuthReady = null;
+                reject(error);
+            }
+        });
+    });
+    return adminAuthReady;
+}
+
+async function enterAdminDashboard(initialTab = 'orders') {
     const overlay = document.getElementById('login-overlay');
     const app = document.getElementById('app-content');
     if (!overlay || !app) return;
+
+    try {
+        await ensureAdminFirebaseAuth();
+    } catch (error) {
+        console.error('admin firebase auth failed', error);
+        alert('تعذر الاتصال بقاعدة البيانات — تحقق من الإنترنت وحاول مرة أخرى');
+        return;
+    }
 
     overlay.style.opacity = '0';
     setTimeout(() => {
@@ -921,16 +954,19 @@ function startOrderRealtimeAlerts() {
     ordersState.clear();
     updateBrowserNotifButton();
 
-    ordersUnsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-        const pendingCount = snapshot.docs.filter(
-            (docSnap) => (docSnap.data().status || 'pending') === 'pending'
-        ).length;
+    const pendingOrdersQuery = query(
+        collection(db, 'orders'),
+        where('status', '==', 'pending')
+    );
+
+    ordersUnsubscribe = onSnapshot(pendingOrdersQuery, (snapshot) => {
+        const pendingCount = snapshot.size;
         updatePendingBadgeFromCount(pendingCount);
         lastPendingCount = pendingCount;
 
         if (!ordersAlertsReady) {
             snapshot.docs.forEach((docSnap) => {
-                ordersState.set(docSnap.id, docSnap.data().status || 'pending');
+                ordersState.set(docSnap.id, docSnap.data());
             });
             ordersAlertsReady = true;
             refreshVisibleOrdersTab();
@@ -942,11 +978,10 @@ function startOrderRealtimeAlerts() {
         snapshot.docChanges().forEach((change) => {
             const data = change.doc.data();
             const id = change.doc.id;
-            const status = data.status || 'pending';
             const customerName = data.name || 'زبون';
             const total = `${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع`;
 
-            if (change.type === 'added' && status === 'pending') {
+            if (change.type === 'added') {
                 alertOrderOnce(`new-order-${id}`, () => {
                     showAdminBrowserNotification({
                         title: '📦 طلب جديد',
@@ -955,23 +990,15 @@ function startOrderRealtimeAlerts() {
                         orderId: id,
                         notifTag: `tufaha-new-${id}`,
                     });
-                    // Web Push يُرسل مرة واحدة من تطبيق الزبون — لا نكرّره من الداشبورد
                 });
                 shouldRefresh = true;
-            } else if (change.type === 'modified') {
-                const prevStatus = ordersState.get(id);
-                if (prevStatus && prevStatus !== status && !locallyUpdatedOrders.has(id)) {
-                    // لا نُشعِر الأدمن بتحديثات الحالة — هو اللي يغيّرها من الداشبورد
-                }
-                if (prevStatus !== status) shouldRefresh = true;
+                ordersState.set(id, data);
             } else if (change.type === 'removed') {
                 shouldRefresh = true;
-            }
-
-            if (change.type === 'removed') {
                 ordersState.delete(id);
-            } else {
-                ordersState.set(id, status);
+            } else if (change.type === 'modified') {
+                shouldRefresh = true;
+                ordersState.set(id, data);
             }
         });
 
@@ -1607,7 +1634,9 @@ window.loadNotificationsHistory = async () => {
     list.innerHTML = loadingState();
 
     try {
-        const snap = await getDocs(collection(db, 'notifications'));
+        const snap = await getDocs(
+            query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50))
+        );
         const items = [];
         snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 

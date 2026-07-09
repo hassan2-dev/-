@@ -7,8 +7,7 @@
  *   node scripts/send-welcome-broadcast.js --dry-run
  */
 
-const PROJECT_ID = 'basjfk-58536';
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const { FIRESTORE_BASE, getAnonymousIdToken } = require('./firebase-auth');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 const DEFAULT_TITLE = 'أهلاً بك في متجر تفاحة 🍎';
@@ -87,6 +86,7 @@ async function fetchAllPushTokens() {
 }
 
 async function createBroadcastNotification(title, body) {
+  const token = await getAnonymousIdToken();
   const fields = {
     phone: toFirestoreValue(''),
     email: toFirestoreValue(''),
@@ -99,7 +99,10 @@ async function createBroadcastNotification(title, body) {
 
   const res = await fetch(`${FIRESTORE_BASE}/notifications`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ fields }),
   });
 
