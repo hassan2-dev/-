@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors, FontSize, Spacing, BorderRadius, Layout, getFooterBottomPadding } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
-import { fetchCollection } from '../lib/firebase';
+import { fetchCustomerOrders } from '../lib/customerOrders';
 import { isValidIraqiPhone, normalizeIraqiPhone } from '../lib/phone';
 import { rtlInput } from '../lib/rtl';
 import {
@@ -34,9 +34,9 @@ const STATUS_LABELS: Record<string, string> = {
   preparing: 'طلبك تحت التجهيز',
   on_the_way: 'طلبك في التوصيل',
 };
-const ORDER_EXPIRE_MS = 6 * 60 * 60 * 1000;
 const MAX_VISIBLE_ORDERS = 3;
 const CART_ONLY_STATUSES = new Set(['pending', 'preparing']);
+const ORDER_POLL_MS = 2 * 60 * 1000;
 
 interface Props {
   mode?: 'tab' | 'stack';
@@ -79,48 +79,6 @@ export default function CartScreen({ mode = 'stack' }: Props) {
     if (!isStoreOpen) setDeliveryMode('scheduled');
   }, [isStoreOpen]);
 
-  const getOrderTime = useCallback((order: any) => {
-    const raw = order?.statusUpdatedAt || order?.createdAt;
-    const time = raw ? new Date(raw).getTime() : 0;
-    return Number.isFinite(time) ? time : 0;
-  }, []);
-
-  const loadLatestOrder = useCallback(async () => {
-    try {
-      const profile = await loadCustomerProfile();
-      if (!profile?.name || !profile?.phone) {
-        setLatestOrders([]);
-        return;
-      }
-
-      const orders = await fetchCollection('orders');
-      const matchedOrders = orders
-        .filter((order: any) => order.name === profile.name && order.phone === profile.phone)
-        .filter((order: any) => CART_ONLY_STATUSES.has(order.status))
-        .sort((a: any, b: any) => getOrderTime(b) - getOrderTime(a))
-        .filter((order: any) => !(order.status === 'on_the_way' && Date.now() - getOrderTime(order) > ORDER_EXPIRE_MS))
-        .slice(0, MAX_VISIBLE_ORDERS);
-
-      setLatestOrders(matchedOrders);
-      setHiddenOrderIds((prev: string[]) => prev.filter((id: string) => matchedOrders.some((order: any) => order.id === id)));
-    } catch {
-      setLatestOrders([]);
-    }
-  }, [getOrderTime]);
-
-  useEffect(() => {
-    loadProfile();
-    loadLatestOrder();
-    const timer = setInterval(loadLatestOrder, 30000);
-    return () => clearInterval(timer);
-  }, [loadLatestOrder]);
-
-  useEffect(() => {
-    if (showCheckout) {
-      loadProfile();
-    }
-  }, [showCheckout]);
-
   const loadProfile = useCallback(async () => {
     try {
       const parsed = await loadCustomerProfile();
@@ -143,11 +101,34 @@ export default function CartScreen({ mode = 'stack' }: Props) {
     } catch (e) {}
   }, [userPhone]);
 
+  const loadLatestOrder = useCallback(async () => {
+    try {
+      const orders = await fetchCustomerOrders({ hideExpiredOnTheWay: true });
+      const matchedOrders = orders
+        .filter((order: any) => CART_ONLY_STATUSES.has(order.status))
+        .slice(0, MAX_VISIBLE_ORDERS);
+
+      setLatestOrders(matchedOrders);
+      setHiddenOrderIds((prev: string[]) => prev.filter((id: string) => matchedOrders.some((order: any) => order.id === id)));
+    } catch {
+      setLatestOrders([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [loadProfile])
+      loadLatestOrder();
+      const timer = setInterval(loadLatestOrder, ORDER_POLL_MS);
+      return () => clearInterval(timer);
+    }, [loadProfile, loadLatestOrder])
   );
+
+  useEffect(() => {
+    if (showCheckout) {
+      loadProfile();
+    }
+  }, [showCheckout, loadProfile]);
 
   const handleCheckout = async () => {
     if (cart.length === 0) {

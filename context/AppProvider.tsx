@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionFresh, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken, getDocument } from '../lib/firebase';
+import { fetchCollectionCached, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken, getDocument } from '../lib/firebase';
 import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
 import {
   preparePushNotifications,
@@ -138,9 +138,17 @@ export function AppProvider({ children }: { children: any }) {
   const refreshInFlightRef = useRef(false);
   const lastCatalogRefreshRef = useRef(0);
   const fetchAllDataRef = useRef<(f?: boolean) => void>(() => {});
-  const CATALOG_REFRESH_THROTTLE_MS = 15000;
-  const NOTIFICATION_POLL_MS = 25000;
+  const prevStoreOpenRef = useRef<boolean | null>(null);
+  const CATALOG_REFRESH_THROTTLE_MS = 5 * 60 * 1000;
+  const NOTIFICATION_POLL_MS = 15 * 60 * 1000;
   const STORE_HOURS_CHECK_MS = 60000;
+  const CATALOG_FETCH_GAP_MS = 900;
+  const STARTUP_FETCH_DELAY_MS = 2500;
+  const EMPTY_CATALOG_RETRY_MS = 95000;
+  const FOREGROUND_REFRESH_MS = 5 * 60 * 1000;
+  const STORE_SETTINGS_CACHE_KEY = 'cache_settings_store';
+  const STORE_SETTINGS_TS_KEY = 'cache_ts_settings_store';
+  const STORE_SETTINGS_TTL_MS = 30 * 60 * 1000;
 
   const isStoreOpen = useMemo(
     () => checkStoreOpen(storeSettings),
@@ -158,8 +166,8 @@ export function AppProvider({ children }: { children: any }) {
   useEffect(() => {
     loadLocalData();
     bootstrapFromCache();
-    loadStoreSettings();
-    fetchAllData(false);
+    const timer = setTimeout(() => fetchAllData(false), STARTUP_FETCH_DELAY_MS);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -167,17 +175,53 @@ export function AppProvider({ children }: { children: any }) {
     return () => clearInterval(timer);
   }, []);
 
+  // عند فتح المتجر (أوقات العمل) أعد الجلب فقط إذا الكتالوج فاضي
+  useEffect(() => {
+    const wasOpen = prevStoreOpenRef.current;
+    prevStoreOpenRef.current = isStoreOpen;
+    if (wasOpen === false && isStoreOpen && products.length === 0) {
+      lastCatalogRefreshRef.current = 0;
+      fetchAllData(false);
+    }
+  }, [isStoreOpen, products.length]);
+
+  // إعادة محاولة تلقائية إذا فشل الجلب (429) والكتالوج فاضي
+  useEffect(() => {
+    if (dataLoading || products.length > 0) return;
+    const timer = setTimeout(() => {
+      lastCatalogRefreshRef.current = 0;
+      fetchAllData(false);
+    }, EMPTY_CATALOG_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [dataLoading, products.length]);
+
   async function loadStoreSettings() {
     try {
+      const tsRaw = await AsyncStorage.getItem(STORE_SETTINGS_TS_KEY);
+      const ts = tsRaw ? Number(tsRaw) : 0;
+      if (ts > 0 && Date.now() - ts < STORE_SETTINGS_TTL_MS) {
+        const cached = await AsyncStorage.getItem(STORE_SETTINGS_CACHE_KEY);
+        if (cached) {
+          setStoreSettings(parseStoreSettings(JSON.parse(cached)));
+          return;
+        }
+      }
+
       const raw = await getDocument('settings', 'store');
-      setStoreSettings(parseStoreSettings(raw));
+      const parsed = parseStoreSettings(raw);
+      setStoreSettings(parsed);
+      await AsyncStorage.multiSet([
+        [STORE_SETTINGS_CACHE_KEY, JSON.stringify(parsed)],
+        [STORE_SETTINGS_TS_KEY, String(Date.now())],
+      ]);
     } catch {
       setStoreSettings(DEFAULT_STORE_SETTINGS);
     }
   }
 
   const refreshData = useCallback(async () => {
-    await fetchAllData(true);
+    lastCatalogRefreshRef.current = 0;
+    await fetchAllData(false);
   }, []);
 
   useEffect(() => {
@@ -187,25 +231,24 @@ export function AppProvider({ children }: { children: any }) {
 
       if (nextAppState === 'active' && wasBackground) {
         const now = Date.now();
-        if (now - lastForegroundRefreshRef.current > 20000) {
+        if (now - lastForegroundRefreshRef.current > FOREGROUND_REFRESH_MS) {
           lastForegroundRefreshRef.current = now;
-          refreshData();
+          lastCatalogRefreshRef.current = 0;
+          fetchAllData(false);
         }
       }
     });
 
     return () => subscription.remove();
-  }, [refreshData]);
+  }, []);
 
-  // Fetch Firebase data when logged in
-  useEffect(() => {
-    if (isLoggedIn) {
-      // Catalog already fetched on mount; only force a refresh if cache is empty.
-      if (products.length === 0 && categories.length === 0) {
-        fetchAllData(false);
-      }
-    }
-  }, [isLoggedIn]);
+  async function hasCachedCatalog(): Promise<boolean> {
+    const [cats, prods] = await Promise.all([
+      readCachedCollection('categories'),
+      readCachedCollection('products'),
+    ]);
+    return Boolean((cats && cats.length) || (prods && prods.length));
+  }
 
   async function checkAuth() {
     try {
@@ -279,25 +322,32 @@ export function AppProvider({ children }: { children: any }) {
     try {
       if (forceRefresh) {
         await clearCollectionCache();
+      } else {
+        const serverVersion = await fetchServerVersion();
+        const cachedVersion = await AsyncStorage.getItem('data_version');
+        if (serverVersion && cachedVersion === serverVersion && (await hasCachedCatalog())) {
+          await loadStoreSettings();
+          return;
+        }
       }
 
-      const cats = await fetchCollectionFresh('categories');
+      const cats = await fetchCollectionCached('categories');
       if (cats.data.length) setCategories(cats.data as Category[]);
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const prods = await fetchCollectionFresh('products');
+      const prods = await fetchCollectionCached('products');
       if (prods.data.length) {
         setProducts(prods.data.map((p: any) => normalizeProduct(p)));
       }
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const bans = await fetchCollectionFresh('banners');
+      const bans = await fetchCollectionCached('banners');
       if (bans.data.length) {
         setBanners(bans.data.map((b: any) => b.image).filter(Boolean));
       }
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const offs = await fetchCollectionFresh('offers');
+      const offs = await fetchCollectionCached('offers');
       if (offs.data.length) {
         setOffers(offs.data.map((o: any) => o.image).filter(Boolean));
       }
@@ -643,15 +693,29 @@ export function AppProvider({ children }: { children: any }) {
       setNotifications([]);
       return;
     }
+
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
     preparePushNotifications().catch(() => {});
-    getNotificationPermissionState()
-      .then((state) => {
-        if (state === 'granted') syncPushToken().catch(() => {});
-      })
-      .catch(() => {});
-    refreshNotifications();
-    const timer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
-    return () => clearInterval(timer);
+
+    const pushTimer = setTimeout(() => {
+      getNotificationPermissionState()
+        .then((state) => {
+          if (state === 'granted') syncPushToken().catch(() => {});
+        })
+        .catch(() => {});
+    }, 20000);
+
+    // بعد المنتجات — يقلل 429
+    const startTimer = setTimeout(() => {
+      refreshNotifications();
+      pollTimer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS);
+    }, 45000);
+
+    return () => {
+      clearTimeout(pushTimer);
+      clearTimeout(startTimer);
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications, syncPushToken]);
 
   useEffect(() => {
@@ -662,15 +726,6 @@ export function AppProvider({ children }: { children: any }) {
       },
     });
   }, [isLoggedIn, isGuest, refreshNotifications]);
-
-  useEffect(() => {
-    if (isLoggedIn && !isGuest && (userEmail || userPhone)) {
-      const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') refreshNotifications();
-      });
-      return () => sub.remove();
-    }
-  }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications]);
 
   const submitOrder = useCallback(async (
     name: string,

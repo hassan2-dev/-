@@ -117,42 +117,8 @@ function toFirestoreValue(value: any): any {
 }
 
 export async function fetchCollection(collectionName: string): Promise<any[]> {
-  try {
-    const token = await getAuthToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const allDocs: any[] = [];
-    let pageToken: string | undefined = undefined;
-    const pageSize = 300;
-
-    do {
-      const params = new URLSearchParams({ pageSize: String(pageSize) });
-      if (pageToken) params.append('pageToken', pageToken);
-      const url = `${FIRESTORE_BASE}/${collectionName}?${params.toString()}`;
-
-      let res = await fetch(url, { headers });
-
-      if (!res.ok && (res.status === 401 || res.status === 403)) {
-        res = await fetch(url);
-      }
-
-      if (!res.ok) {
-        console.error(`Fetch ${collectionName} failed: ${res.status}`);
-        break;
-      }
-
-      const json = await res.json();
-      const documents = json.documents || [];
-      for (const d of documents) allDocs.push(parseFirestoreDoc(d));
-      pageToken = json.nextPageToken;
-    } while (pageToken);
-
-    return allDocs;
-  } catch (error) {
-    console.error(`Error fetching ${collectionName}:`, error);
-    return [];
-  }
+  const { data, ok } = await fetchCollectionWithStatus(collectionName);
+  return ok ? data : [];
 }
 
 export async function fetchNotificationsForUser(
@@ -163,7 +129,7 @@ export async function fetchNotificationsForUser(
   const normalizedPhone = phone?.trim() || '';
   if (!normalizedEmail && !normalizedPhone) return [];
   try {
-    const all = await fetchCollection('notifications');
+    const { data: all } = await fetchCollectionCached('notifications', NOTIFICATIONS_CACHE_TTL_MS);
     return all
       .filter((n) => {
         if (n.broadcast === true) return true;
@@ -240,22 +206,26 @@ export async function setDocument(collectionName: string, docId: string, data: a
 }
 
 export async function getDocument(collectionName: string, docId: string): Promise<any | null> {
-  try {
-    const token = await getAuthToken();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+  return enqueueFirestore(async () => {
+    try {
+      if (isFirestoreRateLimited()) return null;
 
-    const res = await fetch(
-      `${FIRESTORE_BASE}/${collectionName}/${encodeURIComponent(docId)}?alt=json`,
-      { headers }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return parseFirestoreDoc(json);
-  } catch (error) {
-    console.error(`Error getting ${collectionName}/${docId}:`, error);
-    return null;
-  }
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetchFirestoreUrl(
+        `${FIRESTORE_BASE}/${collectionName}/${encodeURIComponent(docId)}?alt=json`,
+        { headers }
+      );
+      if (!res || !res.ok) return null;
+      const json = await res.json();
+      return parseFirestoreDoc(json);
+    } catch (error) {
+      console.error(`Error getting ${collectionName}/${docId}:`, error);
+      return null;
+    }
+  });
 }
 
 export async function deleteDocument(collectionName: string, docId: string): Promise<void> {
@@ -420,59 +390,121 @@ export async function signInWithGoogleToken(
   }
 }
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const CACHED_COLLECTIONS = ['categories', 'products', 'banners', 'offers'];
-const RETRY_COOLDOWN_MS = 30 * 1000;
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const NOTIFICATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
+const ORDERS_CACHE_TTL_MS = 2 * 60 * 1000;
+const CACHED_COLLECTIONS = ['categories', 'products', 'banners', 'offers', 'notifications'];
+const RETRY_COOLDOWN_MS = 90 * 1000;
+const RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
 const CACHE_SCHEMA_VERSION = '2';
 const lastFailureAt: Record<string, number> = {};
 
-async function fetchCollectionWithStatus(collectionName: string): Promise<{ data: any[]; ok: boolean }> {
-  try {
-    const token = await getAuthToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+let lastFirestoreRequestAt = 0;
+const MIN_FIRESTORE_GAP_MS = 900;
+let rateLimitUntil = 0;
+let firestoreChain: Promise<void> = Promise.resolve();
 
-    const allDocs: any[] = [];
-    let pageToken: string | undefined = undefined;
-    const pageSize = 300;
-    let ok = true;
+function isFirestoreRateLimited(): boolean {
+  return Date.now() < rateLimitUntil;
+}
 
-    do {
-      const params = new URLSearchParams({ pageSize: String(pageSize) });
-      if (pageToken) params.append('pageToken', pageToken);
-      const url = `${FIRESTORE_BASE}/${collectionName}?${params.toString()}`;
+function noteFirestoreRateLimit(): void {
+  rateLimitUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+}
 
-      // Retry on 429 with exponential backoff
-      let res: Response | null = null;
-      const backoffs = [0, 800, 1800, 3500];
-      for (let i = 0; i < backoffs.length; i++) {
-        if (backoffs[i] > 0) await new Promise(r => setTimeout(r, backoffs[i]));
-        res = await fetch(url, { headers });
-        if (res.ok) break;
-        if (res.status === 401 || res.status === 403) {
-          res = await fetch(url);
-          if (res.ok) break;
-        }
-        if (res.status !== 429) break; // only retry on rate limit
-      }
+function enqueueFirestore<T>(fn: () => Promise<T>): Promise<T> {
+  const run = firestoreChain.then(fn, fn);
+  firestoreChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
 
-      if (!res || !res.ok) {
-        console.error(`Fetch ${collectionName} failed: ${res?.status ?? 'no-response'}`);
-        ok = false;
-        break;
-      }
-
-      const json = await res.json();
-      const documents = json.documents || [];
-      for (const d of documents) allDocs.push(parseFirestoreDoc(d));
-      pageToken = json.nextPageToken;
-    } while (pageToken);
-
-    return { data: allDocs, ok };
-  } catch (error) {
-    console.error(`Error fetching ${collectionName}:`, error);
-    return { data: [], ok: false };
+async function paceFirestoreRequest(): Promise<void> {
+  const now = Date.now();
+  const waitMs = lastFirestoreRequestAt + MIN_FIRESTORE_GAP_MS - now;
+  if (waitMs > 0) {
+    await new Promise((r) => setTimeout(r, waitMs));
   }
+  lastFirestoreRequestAt = Date.now();
+}
+
+async function fetchFirestoreUrl(
+  url: string,
+  init?: RequestInit
+): Promise<Response | null> {
+  if (isFirestoreRateLimited()) {
+    return null;
+  }
+
+  await paceFirestoreRequest();
+  let res = await fetch(url, init);
+
+  if (res.ok) return res;
+
+  if (res.status === 401 || res.status === 403) {
+    res = await fetch(url, init?.body ? { method: init.method, body: init.body } : undefined);
+    if (res.ok) return res;
+  }
+
+  if (res.status === 429) {
+    noteFirestoreRateLimit();
+    await new Promise((r) => setTimeout(r, 3500));
+    if (isFirestoreRateLimited()) return res;
+    await paceFirestoreRequest();
+    const retry = await fetch(url, init);
+    if (!retry.ok && retry.status === 429) {
+      noteFirestoreRateLimit();
+    }
+    return retry;
+  }
+
+  return res;
+}
+
+async function fetchCollectionWithStatus(collectionName: string): Promise<{ data: any[]; ok: boolean }> {
+  return enqueueFirestore(async () => {
+    try {
+      if (isFirestoreRateLimited()) {
+        return { data: [], ok: false };
+      }
+
+      const token = await getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const allDocs: any[] = [];
+      let pageToken: string | undefined = undefined;
+      const pageSize = 300;
+      let ok = true;
+
+      do {
+        const params = new URLSearchParams({ pageSize: String(pageSize) });
+        if (pageToken) params.append('pageToken', pageToken);
+        const url = `${FIRESTORE_BASE}/${collectionName}?${params.toString()}`;
+
+        const res = await fetchFirestoreUrl(url, { headers });
+
+        if (!res || !res.ok) {
+          if (res?.status === 429) noteFirestoreRateLimit();
+          console.error(`Fetch ${collectionName} failed: ${res?.status ?? 'no-response'}`);
+          ok = false;
+          break;
+        }
+
+        const json = await res.json();
+        const documents = json.documents || [];
+        for (const d of documents) allDocs.push(parseFirestoreDoc(d));
+        pageToken = json.nextPageToken;
+      } while (pageToken);
+
+      return { data: allDocs, ok };
+    } catch (error) {
+      console.error(`Error fetching ${collectionName}:`, error);
+      return { data: [], ok: false };
+    }
+  });
 }
 
 export async function fetchCollectionCached(
@@ -516,9 +548,9 @@ export async function fetchCollectionCached(
     return { data: cachedData, fromCache: true };
   }
 
-  // If we just failed AND we have a usable cache, avoid hammering the server
+  // If we just failed OR hit rate limit, avoid hammering the server
   const lastFail = lastFailureAt[collectionName] || 0;
-  if (Date.now() - lastFail < RETRY_COOLDOWN_MS && cachedData.length > 0) {
+  if (isFirestoreRateLimited() || Date.now() - lastFail < RETRY_COOLDOWN_MS) {
     return { data: cachedData, fromCache: true };
   }
 
@@ -619,6 +651,105 @@ export async function readCachedCollection(collectionName: string): Promise<any[
 // ============================================================
 // Incremental Sync (read-efficient)
 // ============================================================
+
+async function runQueryEqual(
+  collectionId: string,
+  fieldPath: string,
+  value: string,
+  limit = 25
+): Promise<{ data: any[]; ok: boolean }> {
+  return enqueueFirestore(async () => {
+    try {
+      if (isFirestoreRateLimited()) {
+        return { data: [], ok: false };
+      }
+
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const body = {
+        structuredQuery: {
+          from: [{ collectionId }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath },
+              op: 'EQUAL',
+              value: { stringValue: value },
+            },
+          },
+          limit,
+        },
+      };
+
+      const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
+      const res = await fetchFirestoreUrl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!res || !res.ok) {
+        if (res?.status === 429) noteFirestoreRateLimit();
+        return { data: [], ok: false };
+      }
+
+      const json = await res.json();
+      const docs: any[] = [];
+      if (Array.isArray(json)) {
+        for (const row of json) {
+          if (row?.document) docs.push(parseFirestoreDoc(row.document));
+        }
+      }
+      return { data: docs, ok: true };
+    } catch (error) {
+      console.error(`runQueryEqual error ${collectionId}.${fieldPath}`, error);
+      return { data: [], ok: false };
+    }
+  });
+}
+
+/** طلبات الزبون فقط — مو كل الطلبات بالمتجر */
+export async function fetchOrdersByPhoneCached(phone: string): Promise<any[]> {
+  const normalized = phone.trim();
+  if (!normalized) return [];
+
+  const dataKey = `cache_orders_phone_${normalized}`;
+  const tsKey = `cache_ts_orders_phone_${normalized}`;
+
+  let cached: any[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(dataKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) cached = parsed;
+    }
+  } catch (e) {}
+
+  let cacheTs = 0;
+  try {
+    const ts = await AsyncStorage.getItem(tsKey);
+    if (ts) cacheTs = Number(ts) || 0;
+  } catch (e) {}
+
+  if (cached.length > 0 && cacheTs > 0 && Date.now() - cacheTs < ORDERS_CACHE_TTL_MS) {
+    return cached;
+  }
+
+  if (isFirestoreRateLimited() && cached.length > 0) {
+    return cached;
+  }
+
+  const { data, ok } = await runQueryEqual('orders', 'phone', normalized, 30);
+  if (!ok) return cached;
+
+  try {
+    await AsyncStorage.setItem(dataKey, JSON.stringify(data));
+    await AsyncStorage.setItem(tsKey, String(Date.now()));
+  } catch (e) {}
+
+  return data;
+}
 
 async function runQueryWithFilter(
   collectionId: string,
