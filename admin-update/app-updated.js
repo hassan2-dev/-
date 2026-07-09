@@ -164,6 +164,29 @@ const formatOrderDateTime = (value) => {
 
 const getOrderStatusLabel = (status) => ORDER_STATUS_LABELS[status] || status || 'غير معروف';
 
+const getFirestoreTimeMs = (value) => {
+    if (!value) return 0;
+    if (typeof value?.toDate === 'function') {
+        const date = value.toDate();
+        return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+    }
+    if (value?.seconds) return value.seconds * 1000;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+};
+
+const sortOrdersNewestFirst = (orders, mode = 'pending') => {
+    return [...orders].sort((a, b) => {
+        const aTime = mode === 'active'
+            ? (getFirestoreTimeMs(a.data.statusUpdatedAt) || getFirestoreTimeMs(a.data.createdAt))
+            : getFirestoreTimeMs(a.data.createdAt);
+        const bTime = mode === 'active'
+            ? (getFirestoreTimeMs(b.data.statusUpdatedAt) || getFirestoreTimeMs(b.data.createdAt))
+            : getFirestoreTimeMs(b.data.createdAt);
+        return bTime - aTime;
+    });
+};
+
 const APARTMENT_FLOORS = [
     { value: 'G', label: 'الأرضي' },
     { value: '01', label: 'الطابق الأول' },
@@ -1355,8 +1378,14 @@ window.loadOrders = async (status) => {
         }
         return;
     }
-    snapshot.forEach(docSnap => {
-        const data = docSnap.data();
+
+    const sortMode = status === 'pending' ? 'pending' : 'active';
+    const sortedOrders = sortOrdersNewestFirst(
+        snapshot.docs.map((docSnap) => ({ id: docSnap.id, data: docSnap.data() })),
+        sortMode
+    );
+
+    sortedOrders.forEach(({ id: orderId, data }) => {
         let itemsHtml = '';
         data.items?.forEach(item => {
             itemsHtml += `<div class="order-item-row">
@@ -1383,7 +1412,7 @@ window.loadOrders = async (status) => {
             ${data.statusUpdatedAt ? `<div class="order-meta"><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : ''}
             <div class="order-items">${itemsHtml || '<div class="order-meta">لا توجد تفاصيل</div>'}</div>
             <div class="order-total">الإجمالي: ${Number(data.total || 0).toLocaleString('ar-IQ')} د.ع</div>
-            <div class="order-actions">${buildOrderActionButtons(docSnap.id, data.status, status)}</div>
+            <div class="order-actions">${buildOrderActionButtons(orderId, data.status, status)}</div>
         </div>`;
     });
 
@@ -1439,6 +1468,13 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
     }
 
     window.showCustomAlert(`تم تغيير الحالة إلى: ${getOrderStatusLabel(nextStatus)}`);
+    if (reloadStatus === 'pending' && nextStatus !== 'pending') {
+        await window.loadOrders('pending');
+        if (ACTIVE_ORDER_STATUSES.includes(nextStatus)) {
+            await window.loadOrders('accepted');
+        }
+        return;
+    }
     window.loadOrders(reloadStatus);
 };
 
