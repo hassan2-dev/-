@@ -14,7 +14,11 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "migrate:firestore": "tsx scripts/migrate-from-firestore.ts",
+    "migrate:firestore:dry": "tsx scripts/migrate-from-firestore.ts --dry-run",
+    "migrate:firestore:data": "tsx scripts/migrate-from-firestore.ts --data-only",
+    "migrate:firestore:images": "tsx scripts/migrate-from-firestore.ts --images-only"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.787.0",
@@ -51,6 +55,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/uuid": "^10.0.0",
     "prisma": "^6.5.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.2"
   },
   "engines": {

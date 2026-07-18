@@ -4,38 +4,65 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="لوحة إدارة متجر تفاحة — إدارة الطلبات والمنتجات والإشعارات" />
-  <meta name="theme-color" content="#3D9B4F" />
+  <meta name="theme-color" content="#145528" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="تفاحة" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>تفاحة — لوحة الإدارة</title>
   <link rel="icon" type="image/png" href="/assets/icon.png" />
   <link rel="apple-touch-icon" href="/assets/icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="./admin.css" />
 </head>
 <body>
-  <!-- تسجيل الدخول -->
+  <!-- تسجيل الدخول OTP -->
   <div id="login-overlay">
     <div class="login-box">
       <div class="login-logo">
         <img src="/assets/icon.png" alt="شعار تفاحة" class="brand-logo" width="88" height="88" />
       </div>
       <h1>متجر تفاحة</h1>
-      <p>لوحة إدارة المتجر الإلكتروني</p>
-      <label class="field-label" for="admin-pass">رمز الدخول</label>
-      <input
-        type="password"
-        id="admin-pass"
-        placeholder="••••"
-        autocomplete="off"
-        onkeydown="if(event.key==='Enter')verifyAdmin()"
-      />
-      <button class="btn-primary" style="width:100%" onclick="verifyAdmin()">
-        <i class="fa-solid fa-right-to-bracket"></i> دخول
-      </button>
+      <p>لوحة تشغيل المتجر — دخول آمن عبر OTP</p>
+
+      <div id="otp-step-request">
+        <label class="field-label" for="admin-phone">رقم هاتف الأدمن</label>
+        <input
+          type="tel"
+          id="admin-phone"
+          placeholder="0780xxxxxxx"
+          autocomplete="tel"
+          onkeydown="if(event.key==='Enter')requestAdminOtp()"
+        />
+        <button id="btn-request-otp" class="btn-primary" style="width:100%" onclick="requestAdminOtp()">
+          <i class="fa-solid fa-paper-plane"></i> إرسال الرمز
+        </button>
+        <p style="margin-top:0.85rem;font-size:0.78rem;color:#8FA095;line-height:1.5">
+          الرقم لازم يكون ضمن <code>ADMIN_PHONES</code> على السيرفر
+        </p>
+      </div>
+
+      <div id="otp-step-verify" style="display:none">
+        <input type="hidden" id="admin-phone-confirm" />
+        <label class="field-label" for="admin-otp">رمز التحقق</label>
+        <input
+          type="text"
+          id="admin-otp"
+          placeholder="••••••"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          onkeydown="if(event.key==='Enter')verifyAdminOtp()"
+        />
+        <button id="btn-verify-otp" class="btn-primary" style="width:100%" onclick="verifyAdminOtp()">
+          <i class="fa-solid fa-right-to-bracket"></i> دخول للوحة
+        </button>
+        <button type="button" class="btn-action" style="width:100%;margin-top:0.65rem;justify-content:center" onclick="backToPhoneStep()">
+          <i class="fa-solid fa-arrow-right"></i> رجوع
+        </button>
+      </div>
     </div>
   </div>
 
@@ -43,14 +70,13 @@
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar(false)"></div>
 
     <div class="app-shell">
-      <!-- الشريط الجانبي -->
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
           <div class="sidebar-brand-row">
-            <img src="/assets/icon.png" alt="تفاحة" class="brand-logo brand-logo-sm" width="42" height="42" />
+            <img src="/assets/icon.png" alt="تفاحة" class="brand-logo brand-logo-sm" width="44" height="44" />
             <div>
               <h1>متجر تفاحة</h1>
-              <span>لوحة الإدارة</span>
+              <span>Operations Console</span>
             </div>
           </div>
         </div>
@@ -58,22 +84,22 @@
         <nav class="sidebar-nav">
           <div class="nav-group-label">الطلبات</div>
           <button class="nav-item active" onclick="switchTab('orders')">
-            <i class="fa-solid fa-clock"></i> قيد الانتظار
+            <i class="fa-solid fa-inbox"></i> قيد الانتظار
             <span id="pending-orders-badge" class="nav-badge hidden">0</span>
           </button>
           <button class="nav-item" onclick="switchTab('accepted-orders')">
-            <i class="fa-solid fa-truck"></i> طلبات نشطة
+            <i class="fa-solid fa-truck-fast"></i> طلبات نشطة
           </button>
           <button class="nav-item" onclick="switchTab('sales')">
             <i class="fa-solid fa-chart-line"></i> المبيعات
           </button>
 
-          <div class="nav-group-label">المتجر</div>
+          <div class="nav-group-label">الكتالوج</div>
           <button class="nav-item" onclick="switchTab('categories')">
             <i class="fa-solid fa-layer-group"></i> الأقسام
           </button>
           <button class="nav-item" onclick="switchTab('products')">
-            <i class="fa-solid fa-box"></i> المنتجات
+            <i class="fa-solid fa-box-open"></i> المنتجات
           </button>
           <button class="nav-item" onclick="switchTab('discount-offers')">
             <i class="fa-solid fa-percent"></i> الخصومات
@@ -84,20 +110,19 @@
             <i class="fa-solid fa-tags"></i> العروض
           </button>
           <button class="nav-item" onclick="switchTab('banners')">
-            <i class="fa-solid fa-image"></i> البنرات
+            <i class="fa-solid fa-panorama"></i> البنرات
           </button>
           <button class="nav-item" onclick="switchTab('notifications')">
             <i class="fa-solid fa-bell"></i> الإشعارات
           </button>
 
-          <div class="nav-group-label">الإعدادات</div>
+          <div class="nav-group-label">النظام</div>
           <button class="nav-item" onclick="switchTab('store-settings')">
-            <i class="fa-solid fa-clock"></i> أوقات العمل
+            <i class="fa-solid fa-store"></i> أوقات العمل
           </button>
         </nav>
       </aside>
 
-      <!-- المحتوى الرئيسي -->
       <div class="main-area">
         <header class="topbar">
           <div class="topbar-start">
@@ -107,7 +132,7 @@
             <img src="/assets/icon.png" alt="" class="brand-logo brand-logo-xs topbar-logo" width="36" height="36" aria-hidden="true" />
             <div class="topbar-titles">
               <div class="topbar-title" id="page-title">طلبات قيد الانتظار</div>
-              <div class="topbar-sub" id="page-sub">إدارة طلبات الزبائن</div>
+              <div class="topbar-sub" id="page-sub">مراجعة الطلبات الجديدة</div>
             </div>
           </div>
           <div class="topbar-actions">
@@ -546,6 +571,6 @@
       }
     };
   </script>
-  <script type="module" src="./app-updated.js"></script>
+  <script type="module" src="./app-api.js"></script>
 </body>
 </html>

@@ -49,3 +49,17 @@ Admin only: `POST /api/v1/uploads/presign` → put file to `uploadUrl` → store
 3. Add env vars from `.env.example`
 4. Port `3000`
 5. Health check path: `/api/v1/health`
+
+## Firestore → Postgres (+ Bunny → R2)
+
+One-time script (idempotent via `legacyId`):
+
+```bash
+cd backend
+npm run migrate:firestore:dry      # preview counts / image list
+npm run migrate:firestore          # data + images
+npm run migrate:firestore:data     # data only
+npm run migrate:firestore:images   # images only (DB must already have data)
+```
+
+Image rule: download OK → upload R2 → update URL; on any failure keep the old Bunny URL.
