@@ -94,15 +94,10 @@ export async function api(path, options = {}) {
 }
 
 export const AuthApi = {
-  requestOtp: (phone) =>
-    api('/auth/otp/request', {
+  adminLogin: (username, password) =>
+    api('/auth/admin/login', {
       method: 'POST',
-      body: JSON.stringify({ phone }),
-    }),
-  verifyOtp: (phone, code) =>
-    api('/auth/otp/verify', {
-      method: 'POST',
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ username, password }),
     }),
   logout: async () => {
     const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);

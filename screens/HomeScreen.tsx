@@ -23,6 +23,7 @@ import {
   HOME_FEATURED_LIMIT,
 } from '../lib/homeProducts';
 import { SectionHeader } from '../components/layout';
+import SearchResultsDropdown from '../components/SearchResultsDropdown';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
@@ -65,13 +66,22 @@ export default function HomeScreen() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="ابحث عن منتج..."
-        searchProducts={products}
-        onSelectSearchProduct={(productId) =>
-          navigation.navigate('ProductDetail', { productId })
-        }
       />
 
-      {dataLoading && products.length === 0 ? (
+      {isSearchOpen ? (
+        <View style={[styles.content, styles.contentInner, { paddingBottom: tabBottomPadding }]}>
+          <SearchResultsDropdown
+            query={search}
+            products={products}
+            maxResults={30}
+            expanded
+            onSelect={(productId) => {
+              setSearch('');
+              navigation.navigate('ProductDetail', { productId });
+            }}
+          />
+        </View>
+      ) : dataLoading && products.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>جاري تحميل المتجر...</Text>
@@ -82,8 +92,6 @@ export default function HomeScreen() {
           contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={!isSearchOpen}
-          pointerEvents={isSearchOpen ? 'none' : 'auto'}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }

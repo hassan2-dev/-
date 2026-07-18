@@ -26,6 +26,7 @@
     "submit:android": "eas submit --platform android --latest --profile production"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^7.18.2",
@@ -39,6 +40,7 @@
     "expo-device": "~8.0.10",
     "expo-linear-gradient": "~15.0.8",
     "expo-notifications": "~0.32.17",
+    "expo-secure-store": "~15.0.8",
     "expo-web-browser": "~15.0.11",
     "react": "19.1.0",
     "react-dom": "19.1.0",

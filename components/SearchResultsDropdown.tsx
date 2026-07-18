@@ -23,6 +23,8 @@ interface Props {
   onSelect: (productId: string) => void;
   maxResults?: number;
   style?: StyleProp<ViewStyle>;
+  /** When true, the list expands to fill available space (inline page mode). */
+  expanded?: boolean;
 }
 
 export default function SearchResultsDropdown({
@@ -31,6 +33,7 @@ export default function SearchResultsDropdown({
   onSelect,
   maxResults = 12,
   style,
+  expanded = false,
 }: Props) {
   const results = useMemo(
     () => filterProductsByQuery(products, query, maxResults),
@@ -41,12 +44,12 @@ export default function SearchResultsDropdown({
   if (!trimmed) return null;
 
   return (
-    <View style={[styles.dropdown, style]}>
+    <View style={[styles.dropdown, expanded && styles.dropdownExpanded, style]}>
       {results.length === 0 ? (
         <Text style={styles.noResults}>لا توجد نتائج لـ «{trimmed}»</Text>
       ) : (
         <ScrollView
-          style={styles.resultsList}
+          style={[styles.resultsList, expanded && styles.resultsListExpanded]}
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
@@ -94,8 +97,16 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  dropdownExpanded: {
+    maxHeight: undefined,
+    flex: 1,
+  },
   resultsList: {
     maxHeight: 280,
+  },
+  resultsListExpanded: {
+    maxHeight: undefined,
+    flex: 1,
   },
   resultRow: {
     flexDirection: 'row',

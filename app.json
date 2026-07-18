@@ -3,7 +3,7 @@
     "name": "متجر تفاحة",
     "slug": "tufaha-store",
     "owner": "hassune21",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,11 +24,15 @@
       "infoPlist": {
         "CFBundleDisplayName": "متجر تفاحة",
         "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغك بتحديثات حالة طلباتك والعروض الجديدة.",
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["tofahastore"]
+            "CFBundleURLSchemes": [
+              "tofahastore"
+            ]
           },
           {
             "CFBundleURLSchemes": [
@@ -47,7 +51,9 @@
       "package": "com.tofahastore.app",
       "supportsRtl": true,
       "googleServicesFile": "./google-services.json",
-      "permissions": ["POST_NOTIFICATIONS"],
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EEF5FC"
@@ -63,7 +69,10 @@
               "pathPrefix": "/oauth2redirect"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -80,17 +89,17 @@
           "color": "#3D9B4F"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {
         "projectId": "1767f9db-925b-4a14-b0b2-1c8e68ab658f"
       },
+      "apiBaseUrl": "https://api.tofahastore.com/api/v1",
       "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
       "googleIosClientId": "662162908373-ceubra5lenh41osqic0odbt12tm4nksn.apps.googleusercontent.com",
-      "googleAndroidClientId": "662162908373-gnpct2t5j9oo074h2k8he7qnh5v6ac0i.apps.googleusercontent.com",
-      "adminNotifyUrl": "https://tufaha-admin.vercel.app/api/notify-order",
-      "adminNotifySecret": "tufaha_notify_7f3a9c2e"
+      "googleAndroidClientId": "662162908373-gnpct2t5j9oo074h2k8he7qnh5v6ac0i.apps.googleusercontent.com"
     }
   }
 }

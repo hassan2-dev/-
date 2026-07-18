@@ -20,6 +20,8 @@ interface Props {
   onSelectProduct: (productId: string) => void;
   placeholder?: string;
   maxResults?: number;
+  /** Floating dropdown under the bar. Prefer inline results on the page instead. */
+  showDropdown?: boolean;
 }
 
 export default function SearchBarWithResults({
@@ -29,8 +31,9 @@ export default function SearchBarWithResults({
   onSelectProduct,
   placeholder = 'ابحث عن منتج...',
   maxResults = 12,
+  showDropdown = true,
 }: Props) {
-  const showDropdown = value.trim().length > 0;
+  const shouldShowDropdown = showDropdown && value.trim().length > 0;
 
   return (
     <View style={styles.wrap}>
@@ -53,7 +56,7 @@ export default function SearchBarWithResults({
         ) : null}
       </View>
 
-      {showDropdown ? (
+      {shouldShowDropdown ? (
         <View style={styles.dropdownAnchor} pointerEvents="box-none">
           <SearchResultsDropdown
             query={value}

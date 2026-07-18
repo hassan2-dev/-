@@ -1,5 +1,4 @@
-import { fetchOrdersByPhoneCached } from './firebase';
-import { loadCustomerProfile } from './customerProfile';
+import { fetchMyApiOrders } from './api';
 
 export const ORDER_EXPIRE_MS = 6 * 60 * 60 * 1000;
 
@@ -23,16 +22,11 @@ export async function fetchCustomerOrders(options?: {
   limit?: number;
   hideExpiredOnTheWay?: boolean;
 }): Promise<any[]> {
-  const profile = await loadCustomerProfile();
-  if (!profile?.name || !profile?.phone) return [];
-
   const limit = options?.limit;
   const hideExpired = options?.hideExpiredOnTheWay !== false;
 
-  const orders = await fetchOrdersByPhoneCached(profile.phone);
-  let matched = orders
-    .filter((order: any) => order.name === profile.name && order.phone === profile.phone)
-    .sort((a: any, b: any) => getOrderTime(b) - getOrderTime(a));
+  const orders = await fetchMyApiOrders();
+  let matched = orders.sort((a: any, b: any) => getOrderTime(b) - getOrderTime(a));
 
   if (hideExpired) {
     matched = matched.filter(

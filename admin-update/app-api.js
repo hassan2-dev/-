@@ -313,10 +313,8 @@ function showLoginScreen() {
     overlay.style.display = 'flex';
     overlay.style.opacity = '1';
   }
-  const stepRequest = document.getElementById('otp-step-request');
-  const stepVerify = document.getElementById('otp-step-verify');
-  if (stepRequest) stepRequest.style.display = 'block';
-  if (stepVerify) stepVerify.style.display = 'none';
+  const passwordEl = document.getElementById('admin-password');
+  if (passwordEl) passwordEl.value = '';
 }
 
 window.logoutAdmin = async () => {
@@ -325,65 +323,31 @@ window.logoutAdmin = async () => {
   showLoginScreen();
 };
 
-window.requestAdminOtp = async () => {
-  const phone = document.getElementById('admin-phone')?.value?.trim();
-  if (!phone) return showCustomAlert('أدخل رقم الهاتف');
-  const btn = document.getElementById('btn-request-otp');
+window.loginAdmin = async () => {
+  const username = document.getElementById('admin-username')?.value?.trim();
+  const password = document.getElementById('admin-password')?.value;
+  if (!username || !password) return showCustomAlert('أدخل اسم المستخدم وكلمة المرور');
+  const btn = document.getElementById('btn-admin-login');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الدخول...';
   }
   try {
-    const res = await AuthApi.requestOtp(phone);
-    document.getElementById('otp-step-request').style.display = 'none';
-    document.getElementById('otp-step-verify').style.display = 'block';
-    document.getElementById('admin-phone-confirm').value = res.phone || phone;
-    if (res.devCode) {
-      document.getElementById('admin-otp').value = res.devCode;
-      showCustomAlert(`وضع التطوير — الرمز: ${res.devCode}`);
-    } else {
-      showCustomAlert('تم إرسال رمز التحقق');
-    }
-  } catch (e) {
-    showCustomAlert(e.message || 'تعذر إرسال الرمز');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال الرمز';
-    }
-  }
-};
-
-window.verifyAdminOtp = async () => {
-  const phone = document.getElementById('admin-phone-confirm')?.value?.trim();
-  const code = document.getElementById('admin-otp')?.value?.trim();
-  if (!phone || !code) return showCustomAlert('أدخل الهاتف والرمز');
-  const btn = document.getElementById('btn-verify-otp');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...';
-  }
-  try {
-    const session = await AuthApi.verifyOtp(phone, code);
+    const session = await AuthApi.adminLogin(username, password);
     if (session.user?.role !== 'ADMIN') {
       clearSession();
-      throw new Error('هذا الرقم ليس أدمن — أضفه في ADMIN_PHONES على السيرفر');
+      throw new Error('هذا الحساب ليس أدمن');
     }
     saveSession(session);
     enterAdminDashboard('orders');
   } catch (e) {
-    showCustomAlert(e.message || 'رمز غير صحيح');
+    showCustomAlert(e.message || 'بيانات الدخول غير صحيحة');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول للوحة';
     }
   }
-};
-
-window.backToPhoneStep = () => {
-  document.getElementById('otp-step-verify').style.display = 'none';
-  document.getElementById('otp-step-request').style.display = 'block';
 };
 
 function initAdminSession() {
@@ -431,6 +395,19 @@ window.loadStoreSettings = async () => {
     if (openEl) openEl.value = data.openTime || '08:30';
     if (closeEl) closeEl.value = data.closeTime || '02:00';
     if (enabledEl) enabledEl.checked = data.enabled !== false;
+
+    const forceEl = document.getElementById('force-update-enabled');
+    const iosEl = document.getElementById('min-ios-version');
+    const androidEl = document.getElementById('min-android-version');
+    const msgEl = document.getElementById('update-message');
+    if (forceEl) forceEl.checked = Boolean(data.forceUpdate);
+    if (iosEl) iosEl.value = data.minIosVersion || '';
+    if (androidEl) androidEl.value = data.minAndroidVersion || '';
+    if (msgEl) {
+      msgEl.value =
+        data.updateMessage ||
+        'يتوفر تحديث جديد لتطبيق تفاحة. يجب تحديث التطبيق للمتابعة.';
+    }
   } catch (e) {
     showCustomAlert(e.message || 'تعذر تحميل الإعدادات');
   }
@@ -448,6 +425,32 @@ window.saveStoreSettings = async () => {
       enabled,
     });
     showCustomAlert('تم حفظ أوقات العمل');
+  } catch (e) {
+    showCustomAlert(e.message || 'تعذر الحفظ');
+  }
+};
+
+window.saveForceUpdateSettings = async () => {
+  try {
+    const forceUpdate = document.getElementById('force-update-enabled')?.checked === true;
+    const minIosVersion = document.getElementById('min-ios-version')?.value?.trim() || null;
+    const minAndroidVersion =
+      document.getElementById('min-android-version')?.value?.trim() || null;
+    const updateMessage = document.getElementById('update-message')?.value?.trim() || null;
+    await SettingsApi.updateStore({
+      forceUpdate,
+      minIosVersion,
+      minAndroidVersion,
+      updateMessage,
+      iosStoreUrl: 'https://apps.apple.com/app/id6763769377',
+      androidStoreUrl:
+        'https://play.google.com/store/apps/details?id=com.tofahastore.app',
+    });
+    showCustomAlert(
+      forceUpdate
+        ? 'تم تفعيل التحديث الإجباري'
+        : 'تم حفظ إعدادات التحديث (غير مفعّل)',
+    );
   } catch (e) {
     showCustomAlert(e.message || 'تعذر الحفظ');
   }

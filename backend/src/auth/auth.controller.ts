@@ -3,7 +3,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { RefreshTokenDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import {
+  AdminLoginDto,
+  RefreshTokenDto,
+  RequestOtpDto,
+  VerifyOtpDto,
+} from './dto/auth.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -24,6 +29,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify OTP and receive JWT tokens' })
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.auth.verifyOtp(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('admin/login')
+  @ApiOperation({ summary: 'Admin login with fixed username/password' })
+  adminLogin(@Body() dto: AdminLoginDto) {
+    return this.auth.adminLogin(dto);
   }
 
   @Public()

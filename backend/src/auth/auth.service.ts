@@ -8,11 +8,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { createHash, randomInt } from 'crypto';
+import { createHash, randomInt, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SMS_PROVIDER, SmsProvider } from '../common/sms/sms-provider.interface';
 import { isValidIraqiMobile, normalizeIraqiPhone } from '../common/utils/phone.util';
-import { RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import { AdminLoginDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -102,6 +102,42 @@ export class AuthService {
     }
 
     return this.issueTokens(user.id, user.phone, user.role);
+  }
+
+  async adminLogin(dto: AdminLoginDto) {
+    const expectedUsername = this.config.get<string>('adminLogin.username', '');
+    const expectedPassword = this.config.get<string>('adminLogin.password', '');
+
+    if (!expectedUsername || !expectedPassword) {
+      throw new UnauthorizedException('دخول الأدمن غير مفعّل على السيرفر');
+    }
+
+    const usernameOk = this.safeEquals(dto.username, expectedUsername);
+    const passwordOk = this.safeEquals(dto.password, expectedPassword);
+    if (!usernameOk || !passwordOk) {
+      throw new UnauthorizedException('اسم المستخدم أو كلمة المرور غير صحيحة');
+    }
+
+    const adminPhones = this.config.get<string[]>('adminPhones', []);
+    const phone = adminPhones[0] || '07800000000';
+
+    const user = await this.prisma.user.upsert({
+      where: { phone },
+      create: { phone, role: Role.ADMIN, name: 'Admin' },
+      update: { role: Role.ADMIN },
+    });
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('الحساب غير مفعّل');
+    }
+
+    return this.issueTokens(user.id, user.phone, user.role);
+  }
+
+  private safeEquals(a: string, b: string): boolean {
+    const ha = createHash('sha256').update(String(a)).digest();
+    const hb = createHash('sha256').update(String(b)).digest();
+    return timingSafeEqual(ha, hb);
   }
 
   async refresh(refreshToken: string) {

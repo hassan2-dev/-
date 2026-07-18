@@ -201,12 +201,18 @@ model PushToken {
 }
 
 model StoreSettings {
-  id        String   @id @default("store")
-  openTime  String   @default("09:00")
-  closeTime String   @default("22:00")
-  timezone  String   @default("Asia/Baghdad")
-  enabled   Boolean  @default(true)
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default("store")
+  openTime           String   @default("09:00")
+  closeTime          String   @default("22:00")
+  timezone           String   @default("Asia/Baghdad")
+  enabled            Boolean  @default(true)
+  forceUpdate        Boolean  @default(false)
+  minIosVersion      String?
+  minAndroidVersion  String?
+  updateMessage      String?
+  iosStoreUrl        String?
+  androidStoreUrl    String?
+  updatedAt          DateTime @updatedAt
 
   @@map("store_settings")
 }

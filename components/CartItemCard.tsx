@@ -16,7 +16,7 @@ export default function CartItemCard({ item }: Props) {
 
   return (
     <View style={styles.card}>
-      <RemoteImage uri={resolveProductImage(item)} style={styles.image} iconSize={22} />
+      <RemoteImage uri={resolveProductImage(item)} style={styles.image} fallbackLabel={item.name} />
       <View style={styles.details}>
         <Text style={styles.name} numberOfLines={2}>
           {item.name}

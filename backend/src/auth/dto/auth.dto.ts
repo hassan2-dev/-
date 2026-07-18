@@ -26,3 +26,15 @@ export class RefreshTokenDto {
   @IsString()
   refreshToken!: string;
 }
+
+export class AdminLoginDto {
+  @ApiProperty({ example: 'admin' })
+  @IsString()
+  @MinLength(1)
+  username!: string;
+
+  @ApiProperty({ example: '••••••' })
+  @IsString()
+  @MinLength(1)
+  password!: string;
+}

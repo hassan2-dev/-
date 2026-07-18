@@ -54,6 +54,7 @@ export default function AccountScreen() {
     userEmail,
     userDisplayName,
     userPhotoUrl,
+    updateProfile,
     clearCacheAndRefresh,
     unreadNotificationCount,
   } = useApp();
@@ -102,6 +103,12 @@ export default function AccountScreen() {
         address: profile?.address,
         apartment: profile?.apartment,
       });
+      const synced = await updateProfile({
+        name: name.trim(),
+        address: profile?.address,
+        apartment: profile?.apartment as unknown as Record<string, unknown> | undefined,
+      });
+      if (!synced) return;
       showToast('تم حفظ البيانات');
       setShowProfileForm(false);
     } catch {

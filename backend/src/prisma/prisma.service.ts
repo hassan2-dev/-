@@ -15,7 +15,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     await this.catalogMeta.upsert({
       where: { id: 'version' },
       create: { id: 'version' },
-      update: {},
+      update: { updatedAt: new Date() },
     });
   }
 }

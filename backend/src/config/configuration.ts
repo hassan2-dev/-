@@ -20,6 +20,13 @@ export default () => ({
     httpApiKey: process.env.SMS_HTTP_API_KEY,
     senderName: process.env.SMS_SENDER_NAME || 'Tofaha',
   },
+  otpiq: {
+    apiKey: process.env.OTPIQ_API_KEY,
+    provider: process.env.OTPIQ_PROVIDER || 'whatsapp-sms',
+    templateName: process.env.OTPIQ_TEMPLATE_NAME,
+    whatsappAccountId: process.env.OTPIQ_WHATSAPP_ACCOUNT_ID,
+    whatsappPhoneId: process.env.OTPIQ_WHATSAPP_PHONE_ID,
+  },
   r2: {
     accountId: process.env.R2_ACCOUNT_ID,
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
@@ -32,6 +39,10 @@ export default () => ({
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean),
+  adminLogin: {
+    username: process.env.ADMIN_USERNAME || 'admin',
+    password: process.env.ADMIN_PASSWORD || '',
+  },
   throttle: {
     ttl: parseInt(process.env.THROTTLE_TTL_MS || '60000', 10),
     limit: parseInt(process.env.THROTTLE_LIMIT || '100', 10),

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, View, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Layout, Spacing, getTabBarBottomPadding } from '../lib/theme';
@@ -8,6 +8,7 @@ import GlassBackground from '../components/GlassBackground';
 import SearchBarWithResults from '../components/SearchBarWithResults';
 import ScreenHeader from '../components/ScreenHeader';
 import PaginatedProductGrid from '../components/PaginatedProductGrid';
+import SearchResultsDropdown from '../components/SearchResultsDropdown';
 import { SectionHeader } from '../components/layout';
 
 export default function CatalogScreen() {
@@ -17,14 +18,6 @@ export default function CatalogScreen() {
   const { products } = useApp();
   const [search, setSearch] = useState('');
   const isSearchOpen = search.trim().length > 0;
-
-  const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) =>
-      q.split('').every((char) => p.name.toLowerCase().includes(char))
-    );
-  }, [products, search]);
 
   return (
     <GlassBackground>
@@ -39,30 +32,41 @@ export default function CatalogScreen() {
           value={search}
           onChangeText={setSearch}
           products={products}
+          showDropdown={false}
           onSelectProduct={(productId) => navigation.navigate('ProductDetail', { productId })}
           placeholder="ابحث في كل المنتجات..."
         />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={!isSearchOpen}
-        pointerEvents={isSearchOpen ? 'none' : 'auto'}
-      >
-        <SectionHeader
-          title={search.trim() ? 'نتائج البحث' : 'كل المنتجات'}
-          count={filteredProducts.length}
-        />
-        <PaginatedProductGrid
-          products={filteredProducts}
-          onProductPress={(productId) => navigation.navigate('ProductDetail', { productId })}
-          pageSize={20}
-          showMeta={false}
-        />
-      </ScrollView>
+      {isSearchOpen ? (
+        <View style={[styles.content, styles.contentInner, { paddingBottom: tabBottomPadding }]}>
+          <SearchResultsDropdown
+            query={search}
+            products={products}
+            maxResults={30}
+            expanded
+            onSelect={(productId) => {
+              setSearch('');
+              navigation.navigate('ProductDetail', { productId });
+            }}
+          />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[styles.contentInner, { paddingBottom: tabBottomPadding }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SectionHeader title="كل المنتجات" count={products.length} />
+          <PaginatedProductGrid
+            products={products}
+            onProductPress={(productId) => navigation.navigate('ProductDetail', { productId })}
+            pageSize={20}
+            showMeta={false}
+          />
+        </ScrollView>
+      )}
     </GlassBackground>
   );
 }
@@ -72,13 +76,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.sm,
-    zIndex: 1000,
-    ...Platform.select({
-      android: { elevation: 1000 },
-      default: {},
-    }),
   },
-  content: { flex: 1, zIndex: 0 },
+  content: { flex: 1 },
   contentInner: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.sm,

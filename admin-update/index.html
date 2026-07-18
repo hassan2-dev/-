@@ -19,48 +19,34 @@
   <link rel="stylesheet" href="./admin.css" />
 </head>
 <body>
-  <!-- تسجيل الدخول OTP -->
+  <!-- تسجيل الدخول -->
   <div id="login-overlay">
     <div class="login-box">
       <div class="login-logo">
         <img src="/assets/icon.png" alt="شعار تفاحة" class="brand-logo" width="88" height="88" />
       </div>
       <h1>متجر تفاحة</h1>
-      <p>لوحة تشغيل المتجر — دخول آمن عبر OTP</p>
+      <p>لوحة تشغيل المتجر</p>
 
-      <div id="otp-step-request">
-        <label class="field-label" for="admin-phone">رقم هاتف الأدمن</label>
-        <input
-          type="tel"
-          id="admin-phone"
-          placeholder="0780xxxxxxx"
-          autocomplete="tel"
-          onkeydown="if(event.key==='Enter')requestAdminOtp()"
-        />
-        <button id="btn-request-otp" class="btn-primary" style="width:100%" onclick="requestAdminOtp()">
-          <i class="fa-solid fa-paper-plane"></i> إرسال الرمز
-        </button>
-        <p style="margin-top:0.85rem;font-size:0.78rem;color:#8FA095;line-height:1.5">
-          الرقم لازم يكون ضمن <code>ADMIN_PHONES</code> على السيرفر
-        </p>
-      </div>
-
-      <div id="otp-step-verify" style="display:none">
-        <input type="hidden" id="admin-phone-confirm" />
-        <label class="field-label" for="admin-otp">رمز التحقق</label>
+      <div id="login-form">
+        <label class="field-label" for="admin-username">اسم المستخدم</label>
         <input
           type="text"
-          id="admin-otp"
-          placeholder="••••••"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          onkeydown="if(event.key==='Enter')verifyAdminOtp()"
+          id="admin-username"
+          placeholder="admin"
+          autocomplete="username"
+          onkeydown="if(event.key==='Enter')loginAdmin()"
         />
-        <button id="btn-verify-otp" class="btn-primary" style="width:100%" onclick="verifyAdminOtp()">
+        <label class="field-label" for="admin-password">كلمة المرور</label>
+        <input
+          type="password"
+          id="admin-password"
+          placeholder="••••••••"
+          autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')loginAdmin()"
+        />
+        <button id="btn-admin-login" class="btn-primary" style="width:100%" onclick="loginAdmin()">
           <i class="fa-solid fa-right-to-bracket"></i> دخول للوحة
-        </button>
-        <button type="button" class="btn-action" style="width:100%;margin-top:0.65rem;justify-content:center" onclick="backToPhoneStep()">
-          <i class="fa-solid fa-arrow-right"></i> رجوع
         </button>
       </div>
     </div>
@@ -498,6 +484,39 @@
               </div>
               <button class="btn-primary" onclick="saveStoreSettings()">
                 <i class="fa-solid fa-save"></i> حفظ أوقات العمل
+              </button>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <h2>تحديث إجباري للتطبيق</h2>
+              </div>
+              <p class="order-meta" style="margin-bottom:1rem">
+                إذا فعّلته، أي مستخدم بإصدار أقل من الحد الأدنى ما يقدر يستخدم التطبيق إلا بعد التحديث من المتجر.
+              </p>
+              <div class="form-grid">
+                <div class="form-field full">
+                  <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+                    <input type="checkbox" id="force-update-enabled" />
+                    تفعيل التحديث الإجباري
+                  </label>
+                </div>
+                <div class="form-field">
+                  <label for="min-ios-version">أقل إصدار iOS</label>
+                  <input type="text" id="min-ios-version" placeholder="1.0.3" />
+                </div>
+                <div class="form-field">
+                  <label for="min-android-version">أقل إصدار Android</label>
+                  <input type="text" id="min-android-version" placeholder="1.0.3" />
+                </div>
+                <div class="form-field full">
+                  <label for="update-message">رسالة التحديث</label>
+                  <textarea id="update-message" rows="3" placeholder="يتوفر تحديث جديد لتطبيق تفاحة. يجب تحديث التطبيق للمتابعة."></textarea>
+                </div>
+              </div>
+              <button class="btn-primary" onclick="saveForceUpdateSettings()">
+                <i class="fa-solid fa-save"></i> حفظ إعدادات التحديث
               </button>
             </div>
           </div>

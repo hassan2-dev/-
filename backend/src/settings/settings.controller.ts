@@ -23,6 +23,12 @@ export class SettingsController {
     return this.settings.getCatalogVersion();
   }
 
+  @Public()
+  @Get('app-version')
+  appVersion() {
+    return this.settings.getAppVersionPolicy();
+  }
+
   @ApiBearerAuth()
   @Roles(Role.ADMIN)
   @Patch('store')

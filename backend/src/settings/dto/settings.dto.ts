@@ -23,4 +23,36 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Force users below min version to update' })
+  @IsOptional()
+  @IsBoolean()
+  forceUpdate?: boolean;
+
+  @ApiPropertyOptional({ example: '1.0.3' })
+  @IsOptional()
+  @IsString()
+  minIosVersion?: string | null;
+
+  @ApiPropertyOptional({ example: '1.0.3' })
+  @IsOptional()
+  @IsString()
+  minAndroidVersion?: string | null;
+
+  @ApiPropertyOptional({ example: 'يتوفر تحديث مهم. حدّث التطبيق للمتابعة.' })
+  @IsOptional()
+  @IsString()
+  updateMessage?: string | null;
+
+  @ApiPropertyOptional({ example: 'https://apps.apple.com/app/id6763769377' })
+  @IsOptional()
+  @IsString()
+  iosStoreUrl?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://play.google.com/store/apps/details?id=com.tofahastore.app',
+  })
+  @IsOptional()
+  @IsString()
+  androidStoreUrl?: string | null;
 }

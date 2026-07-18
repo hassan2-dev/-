@@ -1,8 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AppState } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchCollectionCached, clearCollectionCache, addDocument, fetchServerVersion, readCachedCollection, fetchNotificationsForUser, signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogleToken, savePushToken, removePushToken, getDocument } from '../lib/firebase';
-import { parseGoogleProfileFromIdToken, resolveUserDisplayName } from '../lib/authConfig';
+import {
+  clearApiCatalogCache,
+  createApiOrder,
+  fetchApiCatalogVersion,
+  fetchApiCollectionCached,
+  fetchApiStoreSettings,
+  fetchMyApiNotifications,
+  getCurrentUser,
+  getStoredApiUser,
+  hasApiSession,
+  logoutApi,
+  markApiNotificationRead,
+  readApiCachedCollection,
+  registerApiPushToken,
+  requestPhoneOtp,
+  updateMyApiProfile,
+  verifyPhoneOtp,
+} from '../lib/api';
 import {
   preparePushNotifications,
   getNotificationPermissionState,
@@ -11,8 +27,6 @@ import {
   getPushPlatform,
   addNotificationListeners,
 } from '../lib/pushNotifications';
-import { getOrderStatusNotification } from '../lib/notificationMessages';
-import { notifyAdminNewOrder } from '../lib/adminNotify';
 import { Category, Product, CartItem, StoreSettings } from '../lib/types';
 import { normalizeProduct } from '../lib/productImage';
 import { DELIVERY_COST } from '../lib/theme';
@@ -52,11 +66,14 @@ interface AppContextType {
   userPhone: string | null;
   userDisplayName: string | null;
   userPhotoUrl: string | null;
-  loginWithEmail: (email: string, password: string) => Promise<boolean>;
-  registerWithEmail: (email: string, password: string) => Promise<boolean>;
-  loginAsGuest: () => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
-  finalizeGoogleSignIn: (idToken: string) => Promise<boolean>;
+  requestOtp: (phone: string) => Promise<{ ok: boolean; phone?: string; devCode?: string }>;
+  verifyOtp: (phone: string, code: string) => Promise<boolean>;
+  updateProfile: (profile: {
+    name?: string;
+    address?: string;
+    email?: string;
+    apartment?: Record<string, unknown>;
+  }) => Promise<boolean>;
   logout: () => void;
 
   // Data
@@ -207,8 +224,8 @@ export function AppProvider({ children }: { children: any }) {
         }
       }
 
-      const raw = await getDocument('settings', 'store');
-      const parsed = parseStoreSettings(raw);
+      const raw = await fetchApiStoreSettings();
+      const parsed = parseStoreSettings(raw as unknown as Record<string, unknown>);
       setStoreSettings(parsed);
       await AsyncStorage.multiSet([
         [STORE_SETTINGS_CACHE_KEY, JSON.stringify(parsed)],
@@ -225,7 +242,7 @@ export function AppProvider({ children }: { children: any }) {
   }, []);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: string) => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const wasBackground = /inactive|background/.test(appStateRef.current);
       appStateRef.current = nextAppState;
 
@@ -244,39 +261,50 @@ export function AppProvider({ children }: { children: any }) {
 
   async function hasCachedCatalog(): Promise<boolean> {
     const [cats, prods] = await Promise.all([
-      readCachedCollection('categories'),
-      readCachedCollection('products'),
+      readApiCachedCollection('categories'),
+      readApiCachedCollection('products'),
     ]);
     return Boolean((cats && cats.length) || (prods && prods.length));
   }
 
   async function checkAuth() {
     try {
-      const [loggedIn, guest, email, phone, displayName, photoUrl] = await Promise.all([
-        AsyncStorage.getItem('is_logged_in'),
-        AsyncStorage.getItem('is_guest'),
-        AsyncStorage.getItem('auth_email'),
-        AsyncStorage.getItem('auth_phone'),
-        AsyncStorage.getItem('auth_display_name'),
-        AsyncStorage.getItem('auth_photo_url'),
-      ]);
-      setIsGuest(guest === 'true');
-      setUserEmail(email);
-      setUserPhone(phone);
-      setUserDisplayName(displayName);
-      setUserPhotoUrl(photoUrl);
-      setIsLoggedIn(loggedIn === 'true' && (!!email || guest === 'true'));
-    } catch (e) {}
-    setIsCheckingAuth(false);
+      const hasSession = await hasApiSession();
+      if (!hasSession) {
+        setIsLoggedIn(false);
+        return;
+      }
+
+      const cachedUser = await getStoredApiUser();
+      if (cachedUser) {
+        setUserEmail(cachedUser.email || null);
+        setUserPhone(cachedUser.phone);
+        setUserDisplayName(cachedUser.name || null);
+        setIsLoggedIn(true);
+      }
+
+      const user = await getCurrentUser();
+      setIsGuest(false);
+      setUserEmail(user.email || null);
+      setUserPhone(user.phone);
+      setUserDisplayName(user.name || null);
+      setUserPhotoUrl(null);
+      setIsLoggedIn(true);
+    } catch {
+      await logoutApi();
+      setIsLoggedIn(false);
+    } finally {
+      setIsCheckingAuth(false);
+    }
   }
 
   async function bootstrapFromCache() {
     try {
       const [cats, prods, bans, offs] = await Promise.all([
-        readCachedCollection('categories'),
-        readCachedCollection('products'),
-        readCachedCollection('banners'),
-        readCachedCollection('offers'),
+        readApiCachedCollection('categories'),
+        readApiCachedCollection('products'),
+        readApiCachedCollection('banners'),
+        readApiCachedCollection('offers'),
       ]);
       if (cats && cats.length) setCategories(cats as Category[]);
       if (prods && prods.length) setProducts(prods.map((p: any) => normalizeProduct(p)));
@@ -321,9 +349,9 @@ export function AppProvider({ children }: { children: any }) {
     if (!hasHydratedDataRef.current) setDataLoading(true);
     try {
       if (forceRefresh) {
-        await clearCollectionCache();
+        await clearApiCatalogCache();
       } else {
-        const serverVersion = await fetchServerVersion();
+        const serverVersion = await fetchApiCatalogVersion();
         const cachedVersion = await AsyncStorage.getItem('data_version');
         if (serverVersion && cachedVersion === serverVersion && (await hasCachedCatalog())) {
           await loadStoreSettings();
@@ -331,30 +359,30 @@ export function AppProvider({ children }: { children: any }) {
         }
       }
 
-      const cats = await fetchCollectionCached('categories');
+      const cats = await fetchApiCollectionCached('categories', forceRefresh);
       if (cats.data.length) setCategories(cats.data as Category[]);
       await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const prods = await fetchCollectionCached('products');
+      const prods = await fetchApiCollectionCached('products', forceRefresh);
       if (prods.data.length) {
         setProducts(prods.data.map((p: any) => normalizeProduct(p)));
       }
       await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const bans = await fetchCollectionCached('banners');
+      const bans = await fetchApiCollectionCached('banners', forceRefresh);
       if (bans.data.length) {
         setBanners(bans.data.map((b: any) => b.image).filter(Boolean));
       }
       await new Promise((r) => setTimeout(r, CATALOG_FETCH_GAP_MS));
 
-      const offs = await fetchCollectionCached('offers');
+      const offs = await fetchApiCollectionCached('offers', forceRefresh);
       if (offs.data.length) {
         setOffers(offs.data.map((o: any) => o.image).filter(Boolean));
       }
 
       await loadStoreSettings();
 
-      const serverVersion = await fetchServerVersion();
+      const serverVersion = await fetchApiCatalogVersion();
       if (serverVersion) {
         try {
           await AsyncStorage.setItem('data_version', serverVersion);
@@ -377,123 +405,64 @@ export function AppProvider({ children }: { children: any }) {
   }, []);
 
   const clearCacheAndRefresh = useCallback(async () => {
-    await clearCollectionCache();
+    await clearApiCatalogCache();
     lastCatalogRefreshRef.current = 0;
     await fetchAllData(true);
     showToast('تم تحديث البيانات من السيرفر');
   }, [showToast]);
 
-  const completeEmailLogin = useCallback(async (email: string) => {
-    const normalized = email.trim().toLowerCase();
-    await AsyncStorage.multiSet([
-      ['is_logged_in', 'true'],
-      ['is_guest', 'false'],
-      ['auth_email', normalized],
-    ]);
-    await AsyncStorage.multiRemove(['auth_display_name', 'auth_photo_url']);
-    setIsGuest(false);
-    setUserEmail(normalized);
-    setUserDisplayName(null);
-    setUserPhotoUrl(null);
-    setIsLoggedIn(true);
-  }, []);
-
-  const loginWithEmail = useCallback(async (email: string, password: string) => {
-    const result = await signInWithEmailPassword(email.trim().toLowerCase(), password);
-    if (!result.ok) {
-      showToast(result.message || 'تعذر تسجيل الدخول');
-      return false;
+  const requestOtp = useCallback(async (phone: string) => {
+    try {
+      const result = await requestPhoneOtp(phone.trim());
+      return {
+        ok: true,
+        phone: result.phone,
+        devCode: result.devCode,
+      };
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر إرسال رمز التحقق');
+      return { ok: false };
     }
-    await completeEmailLogin(email);
-    showToast('تم تسجيل الدخول بنجاح');
-    return true;
-  }, [completeEmailLogin, showToast]);
-
-  const registerWithEmail = useCallback(async (email: string, password: string) => {
-    const result = await signUpWithEmailPassword(email.trim().toLowerCase(), password);
-    if (!result.ok) {
-      showToast(result.message || 'تعذر إنشاء الحساب');
-      return false;
-    }
-    await completeEmailLogin(email);
-    showToast('تم إنشاء الحساب بنجاح');
-    return true;
-  }, [completeEmailLogin, showToast]);
-
-  const loginAsGuest = useCallback(async () => {
-    await AsyncStorage.multiSet([
-      ['is_logged_in', 'true'],
-      ['is_guest', 'true'],
-    ]);
-    await AsyncStorage.multiRemove(['auth_display_name', 'auth_photo_url']);
-    setIsGuest(true);
-    setUserEmail(null);
-    setUserDisplayName(null);
-    setUserPhotoUrl(null);
-    setIsLoggedIn(true);
-    showToast('مرحباً بك كزائر');
   }, [showToast]);
 
-  const loginWithGoogle = useCallback(async () => {
-    showToast('استخدم زر Google من شاشة تسجيل الدخول');
-  }, [showToast]);
-
-  const finalizeGoogleSignIn = useCallback(async (idToken: string) => {
-    const result = await signInWithGoogleToken(idToken);
-    if (!result.ok) {
-      console.error('[Firebase Google]', result.code, result.message);
-      const message =
-        __DEV__ && result.code
-          ? `${result.message} (${result.code})`
-          : result.message || 'تعذر تسجيل الدخول عبر Google';
-      showToast(message);
+  const verifyOtp = useCallback(async (phone: string, code: string) => {
+    try {
+      const user = await verifyPhoneOtp(phone.trim(), code.trim());
+      setIsGuest(false);
+      setUserEmail(user.email || null);
+      setUserPhone(user.phone);
+      setUserDisplayName(user.name || null);
+      setUserPhotoUrl(null);
+      setIsLoggedIn(true);
+      showToast('تم تسجيل الدخول بنجاح');
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'رمز التحقق غير صحيح');
       return false;
     }
+  }, [showToast]);
 
-    const googleProfile = parseGoogleProfileFromIdToken(idToken);
-    const email = result.email || googleProfile.email;
-    const displayName = resolveUserDisplayName(googleProfile.name, email);
-    const photoUrl = googleProfile.picture;
-
-    if (email) {
-      const storageEntries: [string, string][] = [
-        ['is_logged_in', 'true'],
-        ['is_guest', 'false'],
-        ['auth_email', email],
-      ];
-      if (displayName) storageEntries.push(['auth_display_name', displayName]);
-      if (photoUrl) storageEntries.push(['auth_photo_url', photoUrl]);
-      await AsyncStorage.multiSet(storageEntries);
-      setIsGuest(false);
-      setUserEmail(email);
-      setUserDisplayName(displayName);
-      setUserPhotoUrl(photoUrl);
-      setIsLoggedIn(true);
-    } else {
-      await AsyncStorage.multiSet([
-        ['is_logged_in', 'true'],
-        ['is_guest', 'false'],
-      ]);
-      setIsGuest(false);
-      setUserEmail(null);
-      setIsLoggedIn(true);
+  const updateProfile = useCallback(async (profile: {
+    name?: string;
+    address?: string;
+    email?: string;
+    apartment?: Record<string, unknown>;
+  }) => {
+    try {
+      const user = await updateMyApiProfile(profile);
+      setUserEmail(user.email || null);
+      setUserPhone(user.phone);
+      setUserDisplayName(user.name || null);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر تحديث الحساب');
+      return false;
     }
-
-    showToast('تم تسجيل الدخول عبر Google');
-    return true;
   }, [showToast]);
 
   const logout = useCallback(async () => {
     loggingOutRef.current = true;
-
-    try {
-      const storedToken = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
-      if (storedToken) {
-        await removePushToken(storedToken);
-      }
-    } catch {
-      // ignore
-    }
+    await logoutApi();
 
     setIsLoggedIn(false);
     setIsGuest(false);
@@ -521,9 +490,8 @@ export function AppProvider({ children }: { children: any }) {
     const token = await registerExpoPushToken();
     if (!token) return;
 
-    await savePushToken({
+    await registerApiPushToken({
       token,
-      email: userEmail,
       phone: userPhone,
       platform: getPushPlatform(),
     });
@@ -635,7 +603,7 @@ export function AppProvider({ children }: { children: any }) {
     setNotificationsLoading(true);
     try {
       const [items, readIds] = await Promise.all([
-        fetchNotificationsForUser(userEmail, userPhone),
+        fetchMyApiNotifications(),
         loadReadNotificationIds(),
       ]);
 
@@ -648,7 +616,7 @@ export function AppProvider({ children }: { children: any }) {
         body: n.body || '',
         status: n.status,
         createdAt: n.createdAt,
-        read: readIds.has(n.id),
+        read: Boolean(n.read) || readIds.has(n.id),
       }));
       setNotifications(mapped);
 
@@ -681,6 +649,8 @@ export function AppProvider({ children }: { children: any }) {
     if (!notifications.length) return;
     const allIds = notifications.map((n) => n.id);
     try {
+      const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+      await Promise.allSettled(unreadIds.map((id) => markApiNotificationRead(id)));
       await AsyncStorage.setItem(READ_NOTIFICATION_IDS_KEY, JSON.stringify(allIds));
     } catch {
       // ignore
@@ -753,40 +723,28 @@ export function AppProvider({ children }: { children: any }) {
       })),
       total: totals.total,
       totalDiscount: totals.discount,
-      status: 'pending',
       isScheduled,
-      createdAt: new Date().toISOString(),
     };
     if (scheduledAt) orderData.scheduledAt = scheduledAt;
     if (userEmail) orderData.email = userEmail;
 
-    const success = await addDocument('orders', orderData);
-    if (success) {
-      notifyAdminNewOrder({
-        title: '📦 طلب جديد',
-        body: `${name} — ${Number(totals.total || 0).toLocaleString('ar-IQ')} د.ع`,
-      }).catch(() => {});
-
-      const msg = getOrderStatusNotification('pending');
-      const notification: Record<string, unknown> = {
-        phone,
-        title: msg.title,
-        body: msg.body,
-        status: 'pending',
-      };
-      if (userEmail) notification.email = userEmail;
-      await addDocument('notifications', notification);
+    try {
+      await updateMyApiProfile({ name, address }).catch(() => null);
+      await createApiOrder(orderData);
       clearCart();
       refreshNotifications();
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر إرسال الطلب');
+      return false;
     }
-    return success;
-  }, [cart, getCartTotals, clearCart, refreshNotifications, userEmail, storeSettings]);
+  }, [cart, getCartTotals, clearCart, refreshNotifications, showToast, userEmail, storeSettings]);
 
   return (
     <AppContext.Provider
       value={{
         isLoggedIn, isCheckingAuth, isGuest, userEmail, userPhone, userDisplayName, userPhotoUrl,
-        loginWithEmail, registerWithEmail, loginAsGuest, loginWithGoogle, finalizeGoogleSignIn, logout,
+        requestOtp, verifyOtp, updateProfile, logout,
         categories, products, banners, offers, dataLoading, refreshData, clearCacheAndRefresh,
         cart, addToCart, removeFromCart, updateCartItemQty, clearCart, getCartCount, getCartTotals,
         favorites, toggleFavorite, isFavorite,
