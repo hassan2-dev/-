@@ -43,6 +43,12 @@ export default () => ({
     username: process.env.ADMIN_USERNAME || 'admin',
     password: process.env.ADMIN_PASSWORD || '',
   },
+  // Fixed account for Apple App Review only: logs in with a static OTP,
+  // never sends a real SMS. All other phones use the real OTP flow.
+  reviewAccount: {
+    phone: process.env.REVIEW_PHONE || '07800000000',
+    code: process.env.REVIEW_OTP_CODE || '123456',
+  },
   throttle: {
     ttl: parseInt(process.env.THROTTLE_TTL_MS || '60000', 10),
     limit: parseInt(process.env.THROTTLE_LIMIT || '100', 10),

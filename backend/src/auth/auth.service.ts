@@ -29,6 +29,14 @@ export class AuthService {
       throw new BadRequestException('رقم هاتف عراقي غير صالح');
     }
 
+    // Apple App Review account: pretend the SMS was sent, no real OTP needed.
+    if (this.isReviewPhone(phone)) {
+      return {
+        phone,
+        expiresIn: this.config.get<number>('otp.expiresSeconds', 300),
+      };
+    }
+
     const length = this.config.get<number>('otp.length', 6);
     const expiresSeconds = this.config.get<number>('otp.expiresSeconds', 300);
     const devMode = this.config.get<boolean>('otp.devMode', false);
@@ -59,6 +67,28 @@ export class AuthService {
 
   async verifyOtp(dto: VerifyOtpDto) {
     const phone = normalizeIraqiPhone(dto.phone);
+
+    // Apple App Review account: fixed code, works ONLY for the review phone.
+    if (this.isReviewPhone(phone)) {
+      const reviewCode = this.config.get<string>('reviewAccount.code', '');
+      if (!reviewCode || !this.safeEquals(dto.code, reviewCode)) {
+        throw new UnauthorizedException('رمز التحقق غير صحيح');
+      }
+
+      // Always CUSTOMER: never let the review account carry admin privileges.
+      const user = await this.prisma.user.upsert({
+        where: { phone },
+        create: { phone, role: Role.CUSTOMER, name: 'App Review' },
+        update: { role: Role.CUSTOMER },
+      });
+
+      if (!user.isActive) {
+        throw new UnauthorizedException('الحساب غير مفعّل');
+      }
+
+      return this.issueTokens(user.id, user.phone, Role.CUSTOMER);
+    }
+
     const maxAttempts = this.config.get<number>('otp.maxAttempts', 5);
 
     const otp = await this.prisma.otpCode.findFirst({
@@ -118,8 +148,9 @@ export class AuthService {
       throw new UnauthorizedException('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
 
+    // Fallback must NOT be the Apple review phone (07800000000).
     const adminPhones = this.config.get<string[]>('adminPhones', []);
-    const phone = adminPhones[0] || '07800000000';
+    const phone = adminPhones[0] || '07899999999';
 
     const user = await this.prisma.user.upsert({
       where: { phone },
@@ -132,6 +163,13 @@ export class AuthService {
     }
 
     return this.issueTokens(user.id, user.phone, user.role);
+  }
+
+  private isReviewPhone(phone: string): boolean {
+    const reviewPhone = normalizeIraqiPhone(
+      this.config.get<string>('reviewAccount.phone', ''),
+    );
+    return !!reviewPhone && phone === reviewPhone;
   }
 
   private safeEquals(a: string, b: string): boolean {
