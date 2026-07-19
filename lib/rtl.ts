@@ -1,10 +1,16 @@
 import { I18nManager, TextStyle, ViewStyle } from 'react-native';
 
-/** يُستدعى من index.ts قبل تحميل التطبيق — RTL كامل من اليمين لليسار */
+/**
+ * يُستدعى من index.ts قبل تحميل التطبيق.
+ * لا نستدعي forceRTL هنا — يسبب شاشة بيضاء بصمت على iOS release
+ * إلى أن يُقتل التطبيق بالكامل. الاعتماد على supportsRTL في app.json
+ * + أنماط RTL في الواجهة.
+ */
 export function initRTL(): void {
-  I18nManager.allowRTL(true);
-  if (!I18nManager.isRTL) {
-    I18nManager.forceRTL(true);
+  try {
+    I18nManager.allowRTL(true);
+  } catch {
+    // ignore
   }
 }
 

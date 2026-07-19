@@ -15,6 +15,7 @@ import OfflineOverlay from './components/OfflineOverlay';
 import NotificationPermissionBanner from './components/NotificationPermissionBanner';
 import ForceUpdateGate from './components/ForceUpdateGate';
 import RedAppleLogo from './components/RedAppleLogo';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -180,19 +181,21 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaProvider style={styles.container}>
-        <AppProvider>
-          <NavigationContainer>
-            <AppNavigator />
-          </NavigationContainer>
-          <Toast />
-          <ForceUpdateGate />
-          <NotificationPermissionBanner />
-          <OfflineOverlay />
-        </AppProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={styles.container}>
+        <SafeAreaProvider style={styles.container}>
+          <AppProvider>
+            <NavigationContainer>
+              <AppNavigator />
+            </NavigationContainer>
+            <Toast />
+            <ForceUpdateGate />
+            <NotificationPermissionBanner />
+            <OfflineOverlay />
+          </AppProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 

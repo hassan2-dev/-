@@ -198,6 +198,15 @@
                 <i class="fa-solid fa-list"></i>
                 <h2>الأقسام الحالية</h2>
               </div>
+              <div class="list-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input
+                  type="search"
+                  id="cat-search"
+                  placeholder="ابحث عن قسم..."
+                  oninput="filterCategories(this.value)"
+                />
+              </div>
               <div id="categories-list" class="cards-grid"></div>
             </div>
           </div>
@@ -243,6 +252,15 @@
               <div class="panel-header">
                 <i class="fa-solid fa-boxes-stacked"></i>
                 <h2>المنتجات الحالية</h2>
+              </div>
+              <div class="list-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input
+                  type="search"
+                  id="prod-search"
+                  placeholder="ابحث عن منتج بالاسم أو القسم..."
+                  oninput="filterProducts(this.value)"
+                />
               </div>
               <div id="products-list" class="cards-grid"></div>
             </div>

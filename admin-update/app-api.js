@@ -33,6 +33,7 @@ const ORDER_STATUS_LABELS = {
   accepted: 'تمت الموافقة',
   preparing: 'قيد التجهيز',
   on_the_way: 'في التوصيل',
+  cancelled: 'ملغي',
 };
 
 const formatOrderDateTime = (value) => {
@@ -166,6 +167,11 @@ const buildOrderActionButtons = (id, status, reloadStatus) => {
   } else if (ui === 'preparing') {
     buttons.push(
       `<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')"><i class="fa-solid fa-truck"></i> توصيل</button>`,
+    );
+  }
+  if (['pending', 'accepted', 'preparing', 'on_the_way'].includes(ui)) {
+    buttons.push(
+      `<button class="btn-action delete" onclick="window.cancelOrder('${id}', '${reloadStatus}')"><i class="fa-solid fa-ban"></i> رفض الطلب</button>`,
     );
   }
   return buttons.join(' ');
@@ -505,27 +511,31 @@ window.loadParentCategoriesForSelect = async (selectId, selectedId = '') => {
     });
 };
 
-window.loadCategories = async () => {
+const normalizeSearch = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي');
+
+const renderCategories = (cats) => {
   const list = document.getElementById('categories-list');
-  list.innerHTML = loadingState();
-  try {
-    allCategories = (await CategoriesApi.list()) || [];
-    await loadParentCategoriesForSelect('cat-parent');
-    list.innerHTML = '';
-    if (!allCategories.length) {
-      list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام بعد');
-      return;
-    }
-    const parentMap = Object.fromEntries(
-      allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
-    );
-    allCategories.forEach((data) => {
-      const parentLabel = data.parentId ? parentMap[data.parentId] : null;
-      const safeName = escapeHtml(data.name);
-      const badge = parentLabel
-        ? `<div class="order-meta"><i class="fa-solid fa-folder-tree"></i> فرعي ضمن: ${escapeHtml(parentLabel)}</div>`
-        : `<div class="order-meta"><i class="fa-solid fa-layer-group"></i> قسم رئيسي</div>`;
-      list.innerHTML += `<div class="card-3d">
+  list.innerHTML = '';
+  if (!cats.length) {
+    list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام مطابقة');
+    return;
+  }
+  const parentMap = Object.fromEntries(
+    allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
+  );
+  cats.forEach((data) => {
+    const parentLabel = data.parentId ? parentMap[data.parentId] : null;
+    const safeName = escapeHtml(data.name);
+    const badge = parentLabel
+      ? `<div class="order-meta"><i class="fa-solid fa-folder-tree"></i> فرعي ضمن: ${escapeHtml(parentLabel)}</div>`
+      : `<div class="order-meta"><i class="fa-solid fa-layer-group"></i> قسم رئيسي</div>`;
+    list.innerHTML += `<div class="card-3d">
             <img src="${escapeHtml(data.image || '')}" alt="${safeName}" onerror="this.style.display='none'">
             <div class="card-title">${safeName}</div>
             ${badge}
@@ -534,7 +544,40 @@ window.loadCategories = async () => {
                 <button class="btn-action delete" onclick="deleteDocItem('categories', '${data.id}', null, loadCategories)"><i class="fa-solid fa-trash"></i> حذف</button>
             </div>
         </div>`;
-    });
+  });
+};
+
+window.filterCategories = (term) => {
+  const q = normalizeSearch(term);
+  if (!q) {
+    renderCategories(allCategories);
+    return;
+  }
+  const parentMap = Object.fromEntries(
+    allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
+  );
+  renderCategories(
+    allCategories.filter((c) => {
+      const parentName = c.parentId ? parentMap[c.parentId] || '' : '';
+      return (
+        normalizeSearch(c.name).includes(q) || normalizeSearch(parentName).includes(q)
+      );
+    }),
+  );
+};
+
+window.loadCategories = async () => {
+  const list = document.getElementById('categories-list');
+  list.innerHTML = loadingState();
+  try {
+    allCategories = (await CategoriesApi.list()) || [];
+    await loadParentCategoriesForSelect('cat-parent');
+    if (!allCategories.length) {
+      list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام بعد');
+      return;
+    }
+    const searchBox = document.getElementById('cat-search');
+    window.filterCategories(searchBox ? searchBox.value : '');
   } catch (e) {
     list.innerHTML = emptyState('fa-triangle-exclamation', e.message || 'خطأ');
   }
@@ -613,25 +656,24 @@ window.saveProduct = async () => {
   btn.innerHTML = 'حفظ المنتج <i class="fa-solid fa-save"></i>';
 };
 
-window.loadProducts = async () => {
+let allProductsCache = [];
+
+const renderProducts = (products) => {
   const list = document.getElementById('products-list');
-  list.innerHTML = loadingState();
-  try {
-    const products = (await ProductsApi.list()) || [];
-    list.innerHTML = '';
-    if (!products.length) {
-      list.innerHTML = emptyState('fa-box', 'لا توجد منتجات بعد');
-      return;
-    }
-    products.forEach((data) => {
-      const imgSrc =
-        (data.images && data.images.length > 0 && data.images[0].data) ||
-        data.image1 ||
-        data.image ||
-        '';
-      const catName = data.category?.name || '';
-      const safeName = escapeHtml(data.name);
-      list.innerHTML += `<div class="card-3d">
+  list.innerHTML = '';
+  if (!products.length) {
+    list.innerHTML = emptyState('fa-box', 'لا توجد منتجات مطابقة');
+    return;
+  }
+  products.forEach((data) => {
+    const imgSrc =
+      (data.images && data.images.length > 0 && data.images[0].data) ||
+      data.image1 ||
+      data.image ||
+      '';
+    const catName = data.category?.name || '';
+    const safeName = escapeHtml(data.name);
+    list.innerHTML += `<div class="card-3d">
             <img src="${escapeHtml(imgSrc)}" alt="${safeName}" onerror="this.style.display='none'">
             <div class="card-title">${safeName}</div>
             <div class="card-price">${num(data.price).toLocaleString('ar-IQ')} د.ع</div>
@@ -641,7 +683,36 @@ window.loadProducts = async () => {
                 <button class="btn-action delete" onclick="deleteDocItem('products', '${data.id}', null, loadProducts)"><i class="fa-solid fa-trash"></i> حذف</button>
             </div>
         </div>`;
-    });
+  });
+};
+
+window.filterProducts = (term) => {
+  const q = normalizeSearch(term);
+  if (!q) {
+    renderProducts(allProductsCache);
+    return;
+  }
+  renderProducts(
+    allProductsCache.filter(
+      (p) =>
+        normalizeSearch(p.name).includes(q) ||
+        normalizeSearch(p.category?.name).includes(q) ||
+        normalizeSearch(p.description).includes(q),
+    ),
+  );
+};
+
+window.loadProducts = async () => {
+  const list = document.getElementById('products-list');
+  list.innerHTML = loadingState();
+  try {
+    allProductsCache = (await ProductsApi.list()) || [];
+    if (!allProductsCache.length) {
+      list.innerHTML = emptyState('fa-box', 'لا توجد منتجات بعد');
+      return;
+    }
+    const searchBox = document.getElementById('prod-search');
+    window.filterProducts(searchBox ? searchBox.value : '');
   } catch (e) {
     list.innerHTML = emptyState('fa-triangle-exclamation', e.message || 'خطأ');
   }
@@ -907,6 +978,18 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
     window.loadOrders(reloadStatus);
   } catch (e) {
     showCustomAlert(e.message || 'تعذر تحديث الحالة');
+  }
+};
+
+window.cancelOrder = async (id, reloadStatus = 'pending') => {
+  if (!confirm('متأكد من رفض هذا الطلب؟ سيتم إبلاغ الزبون بالإلغاء.')) return;
+  try {
+    await OrdersApi.updateStatus(id, 'CANCELLED');
+    window.showCustomAlert('تم رفض الطلب وإبلاغ الزبون');
+    await window.loadOrders('pending');
+    await window.loadOrders('accepted');
+  } catch (e) {
+    showCustomAlert(e.message || 'تعذر رفض الطلب');
   }
 };
 

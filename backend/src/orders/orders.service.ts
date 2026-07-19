@@ -94,12 +94,39 @@ export class OrdersService {
       },
     });
 
+    const STATUS_NOTIFICATIONS: Record<string, { title: string; body: string }> = {
+      [OrderStatus.ACCEPTED]: {
+        title: 'تم قبول طلبك ✅',
+        body: 'تمت الموافقة على طلبك وسيتم تجهيزه قريباً',
+      },
+      [OrderStatus.PREPARING]: {
+        title: 'جاري تجهيز طلبك 👨‍🍳',
+        body: 'طلبك قيد التجهيز الآن',
+      },
+      [OrderStatus.ON_THE_WAY]: {
+        title: 'طلبك في الطريق 🚚',
+        body: 'السائق في طريقه إليك، استعد لاستلام الطلب',
+      },
+      [OrderStatus.DELIVERED]: {
+        title: 'تم توصيل طلبك 🎉',
+        body: 'نتمنى لك تجربة ممتعة، شكراً لتسوقك من متجر تفاحة',
+      },
+      [OrderStatus.CANCELLED]: {
+        title: 'تم إلغاء طلبك ❌',
+        body: 'نعتذر، تم إلغاء طلبك. للاستفسار تواصل معنا',
+      },
+    };
+    const message = STATUS_NOTIFICATIONS[dto.status] || {
+      title: 'تحديث حالة الطلب',
+      body: 'تم تحديث حالة طلبك',
+    };
+
     await this.prisma.notification.create({
       data: {
         userId: order.userId,
         orderId: order.id,
-        title: 'تحديث حالة الطلب',
-        body: `حالة طلبك أصبحت: ${dto.status}`,
+        title: message.title,
+        body: message.body,
         phone: order.phone,
         status: dto.status,
       },

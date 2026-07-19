@@ -3,13 +3,20 @@
     "name": "متجر تفاحة",
     "slug": "tufaha-store",
     "owner": "hassune21",
-    "version": "1.0.3",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "supportsRTL": true,
     "scheme": "tofahastore",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1767f9db-925b-4a14-b0b2-1c8e68ab658f",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -49,7 +56,6 @@
     },
     "android": {
       "package": "com.tofahastore.app",
-      "supportsRtl": true,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "POST_NOTIFICATIONS"
@@ -90,12 +96,16 @@
         }
       ],
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      "expo-localization"
     ],
     "extra": {
       "eas": {
         "projectId": "1767f9db-925b-4a14-b0b2-1c8e68ab658f"
       },
+      "supportsRTL": true,
+      "forcesRTL": true,
       "apiBaseUrl": "https://api.tofahastore.com/api/v1",
       "googleWebClientId": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
       "googleIosClientId": "662162908373-ceubra5lenh41osqic0odbt12tm4nksn.apps.googleusercontent.com",
