@@ -33,6 +33,7 @@ const ORDER_STATUS_LABELS = {
   accepted: 'تمت الموافقة',
   preparing: 'قيد التجهيز',
   on_the_way: 'في التوصيل',
+  cancelled: 'ملغي',
 };
 
 const formatOrderDateTime = (value) => {
@@ -166,6 +167,11 @@ const buildOrderActionButtons = (id, status, reloadStatus) => {
   } else if (ui === 'preparing') {
     buttons.push(
       `<button class="btn-action edit" onclick="window.updateOrderStatus('${id}', 'on_the_way', '${reloadStatus}')"><i class="fa-solid fa-truck"></i> توصيل</button>`,
+    );
+  }
+  if (['pending', 'accepted', 'preparing', 'on_the_way'].includes(ui)) {
+    buttons.push(
+      `<button class="btn-action delete" onclick="window.cancelOrder('${id}', '${reloadStatus}')"><i class="fa-solid fa-ban"></i> رفض الطلب</button>`,
     );
   }
   return buttons.join(' ');
@@ -907,6 +913,18 @@ window.updateOrderStatus = async (id, nextStatus, reloadStatus = 'accepted') => 
     window.loadOrders(reloadStatus);
   } catch (e) {
     showCustomAlert(e.message || 'تعذر تحديث الحالة');
+  }
+};
+
+window.cancelOrder = async (id, reloadStatus = 'pending') => {
+  if (!confirm('متأكد من رفض هذا الطلب؟ سيتم إبلاغ الزبون بالإلغاء.')) return;
+  try {
+    await OrdersApi.updateStatus(id, 'CANCELLED');
+    window.showCustomAlert('تم رفض الطلب وإبلاغ الزبون');
+    await window.loadOrders('pending');
+    await window.loadOrders('accepted');
+  } catch (e) {
+    showCustomAlert(e.message || 'تعذر رفض الطلب');
   }
 };
 

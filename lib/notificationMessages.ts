@@ -3,6 +3,8 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   accepted: 'تم قبول طلبك',
   preparing: 'جاري التجهيز',
   on_the_way: 'في الطريق إليك',
+  delivered: 'تم التوصيل',
+  cancelled: 'ملغي',
 };
 
 export function getOrderStatusNotification(status: string): { title: string; body: string } {
@@ -26,6 +28,11 @@ export function getOrderStatusNotification(status: string): { title: string; bod
       return {
         title: 'تم استلام طلبك 📦',
         body: 'طلبك قيد المراجعة وسنبلغك عند الموافقة',
+      };
+    case 'cancelled':
+      return {
+        title: 'تم إلغاء طلبك ❌',
+        body: 'نعتذر، تم إلغاء طلبك. للاستفسار تواصل معنا',
       };
     default:
       return {

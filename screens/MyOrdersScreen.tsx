@@ -26,6 +26,8 @@ const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   accepted: 'checkmark-circle-outline',
   preparing: 'restaurant-outline',
   on_the_way: 'bicycle-outline',
+  delivered: 'checkmark-done-circle-outline',
+  cancelled: 'close-circle-outline',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -33,6 +35,8 @@ const STATUS_COLORS: Record<string, string> = {
   accepted: Colors.primary,
   preparing: '#1976D2',
   on_the_way: '#7B1FA2',
+  delivered: '#2E7D32',
+  cancelled: Colors.danger,
 };
 
 function formatAddress(address?: string): string {
