@@ -3,21 +3,26 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-} catch {
-  // لا نكسر إقلاع التطبيق إذا فشل تهيئة الإشعارات
-}
-
+let handlerReady = false;
 let channelsReady = false;
+
+function ensureNotificationHandler(): void {
+  if (handlerReady) return;
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    handlerReady = true;
+  } catch {
+    // لا نكسر إقلاع التطبيق إذا فشل تهيئة الإشعارات
+  }
+}
 
 export type PushPlatform = 'ios' | 'android' | 'web';
 
@@ -67,6 +72,7 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
 
 /** يجهّز القنوات فقط — بدون طلب إذن من المستخدم */
 export async function preparePushNotifications(): Promise<void> {
+  ensureNotificationHandler();
   if (Platform.OS === 'web' || !Device.isDevice) return;
   try {
     await setupAndroidChannels();

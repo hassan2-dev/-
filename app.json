@@ -3,13 +3,13 @@
     "name": "متجر تفاحة",
     "slug": "tufaha-store",
     "owner": "hassune21",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "supportsRTL": true,
     "scheme": "tofahastore",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "runtimeVersion": {
       "policy": "appVersion"
     },
