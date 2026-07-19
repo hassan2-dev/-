@@ -42,6 +42,10 @@ export class UploadsService {
         accessKeyId,
         secretAccessKey,
       },
+      // R2 rejects presigned PUTs when the SDK bakes a default CRC32 checksum
+      // (of an empty body) into the URL. Only compute checksums when required.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
     return this.client;
   }
