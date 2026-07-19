@@ -92,6 +92,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsDateString()
   scheduledAt?: string;
+
+  @ApiPropertyOptional({ example: 'نقدي' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
 }
 
 export class UpdateOrderStatusDto {

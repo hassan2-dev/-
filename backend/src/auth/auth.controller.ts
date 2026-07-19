@@ -1,10 +1,18 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import {
   AdminLoginDto,
+  DriverLoginDto,
   RefreshTokenDto,
   RequestOtpDto,
   VerifyOtpDto,
@@ -37,6 +45,24 @@ export class AuthController {
   @ApiOperation({ summary: 'Admin login with fixed username/password' })
   adminLogin(@Body() dto: AdminLoginDto) {
     return this.auth.adminLogin(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('driver/login')
+  @ApiOperation({ summary: 'Driver login with username/password' })
+  driverLogin(
+    @Body() dto: DriverLoginDto,
+    @Req() req: Request,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const ip =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      req.ip;
+    return this.auth.driverLogin(dto, {
+      ip,
+      device: dto.device || userAgent || null,
+    });
   }
 
   @Public()

@@ -15,6 +15,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
+import { DriversModule } from './drivers/drivers.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import configuration from './config/configuration';
@@ -56,6 +57,7 @@ import configuration from './config/configuration';
     NotificationsModule,
     UploadsModule,
     SettingsModule,
+    DriversModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

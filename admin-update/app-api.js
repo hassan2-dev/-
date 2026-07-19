@@ -19,6 +19,21 @@ import {
   toUiStatus,
   num,
 } from './api.js';
+import {
+  applyRoleUi,
+  wireLoginMode,
+  handleUnifiedLogin,
+  loadCategoriesTable,
+  loadProductsTable,
+  fillProductCategoryFilter,
+  wireCatalogFilters,
+  loadDriversStats,
+  loadDriversTable,
+  loadDriverOrdersPanel,
+  startDriverPolling,
+  stopDriverPolling,
+  enrichOrderCardHtml,
+} from './catalog-drivers.js';
 
 let allProducts = [];
 let allCategories = [];
@@ -33,7 +48,9 @@ const ORDER_STATUS_LABELS = {
   accepted: 'تمت الموافقة',
   preparing: 'قيد التجهيز',
   on_the_way: 'في التوصيل',
+  delivered: 'تم التسليم',
   cancelled: 'ملغي',
+  delivery_failed: 'تعذر التسليم',
 };
 
 const formatOrderDateTime = (value) => {
@@ -177,6 +194,9 @@ const buildOrderActionButtons = (id, status, reloadStatus) => {
   return buttons.join(' ');
 };
 
+const buildAssignButton = (data) =>
+  `<button class="btn-action edit" onclick="openAssignDriverModal('${data.id}', '${jsStr(data.name)}', '${jsStr(data.driverId || '')}')"><i class="fa-solid fa-user-plus"></i> تعيين مندوب</button>`;
+
 window.showCustomAlert = (message) => {
   const alertBox = document.createElement('div');
   alertBox.innerHTML = `<i class="fa-solid fa-circle-check" style="font-size: 1.5rem; margin-bottom: 5px;"></i><br>${message}`;
@@ -295,21 +315,30 @@ function startOrderPolling() {
   ordersPollTimer = setInterval(pollPendingOrders, 12000);
 }
 
-async function enterAdminDashboard(initialTab = 'orders') {
+async function enterAdminDashboard(initialTab = 'orders', opts = {}) {
   const overlay = document.getElementById('login-overlay');
   const app = document.getElementById('app-content');
   if (!overlay || !app) return;
+  const user = getStoredAdmin();
+  applyRoleUi(user?.role || 'ADMIN');
   overlay.style.opacity = '0';
   setTimeout(() => {
     overlay.style.display = 'none';
     app.style.display = 'block';
     switchTab(initialTab);
-    startOrderPolling();
+    if (opts.isDriver || user?.role === 'DRIVER') {
+      stopOrderPolling();
+      startDriverPolling();
+    } else {
+      stopDriverPolling();
+      startOrderPolling();
+    }
   }, 200);
 }
 
 function showLoginScreen() {
   stopOrderPolling();
+  stopDriverPolling();
   lastPendingCount = null;
   clearSession();
   const overlay = document.getElementById('login-overlay');
@@ -324,43 +353,22 @@ function showLoginScreen() {
 }
 
 window.logoutAdmin = async () => {
-  if (!confirm('تسجيل الخروج من لوحة الإدارة؟')) return;
+  if (!confirm('تسجيل الخروج؟')) return;
   await AuthApi.logout();
   showLoginScreen();
 };
 
 window.loginAdmin = async () => {
-  const username = document.getElementById('admin-username')?.value?.trim();
-  const password = document.getElementById('admin-password')?.value;
-  if (!username || !password) return showCustomAlert('أدخل اسم المستخدم وكلمة المرور');
-  const btn = document.getElementById('btn-admin-login');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الدخول...';
-  }
-  try {
-    const session = await AuthApi.adminLogin(username, password);
-    if (session.user?.role !== 'ADMIN') {
-      clearSession();
-      throw new Error('هذا الحساب ليس أدمن');
-    }
-    saveSession(session);
-    enterAdminDashboard('orders');
-  } catch (e) {
-    showCustomAlert(e.message || 'بيانات الدخول غير صحيحة');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول للوحة';
-    }
-  }
+  await handleUnifiedLogin((tab, opts) => enterAdminDashboard(tab, opts));
 };
 
 function initAdminSession() {
   const token = getAccessToken();
   const user = getStoredAdmin();
   if (token && user?.role === 'ADMIN') {
-    enterAdminDashboard('orders');
+    enterAdminDashboard('orders', { isDriver: false });
+  } else if (token && user?.role === 'DRIVER') {
+    enterAdminDashboard('driver-orders', { isDriver: true });
   }
 }
 
@@ -376,6 +384,7 @@ window.switchTab = (tabId) => {
   if (tabId === 'categories') loadCategories();
   if (tabId === 'products') {
     loadCategoriesForSelect();
+    fillProductCategoryFilter();
     loadProducts();
   }
   if (tabId === 'offers') loadOffers();
@@ -389,6 +398,11 @@ window.switchTab = (tabId) => {
     loadNotificationsHistory();
   }
   if (tabId === 'store-settings') loadStoreSettings();
+  if (tabId === 'drivers') {
+    loadDriversStats();
+    loadDriversTable();
+  }
+  if (tabId === 'driver-orders') loadDriverOrdersPanel();
 };
 
 // === Settings ===
@@ -502,7 +516,8 @@ window.loadParentCategoriesForSelect = async (selectId, selectedId = '') => {
   const select = document.getElementById(selectId);
   if (!select) return;
   select.innerHTML = '<option value="">قسم رئيسي — بدون أب</option>';
-  const cats = allCategories.length ? allCategories : (await CategoriesApi.list()) || [];
+  const cats = (await CategoriesApi.listAdminAll()) || [];
+  allCategories = cats;
   cats
     .filter((c) => !c.parentId)
     .forEach((c) => {
@@ -511,76 +526,9 @@ window.loadParentCategoriesForSelect = async (selectId, selectedId = '') => {
     });
 };
 
-const normalizeSearch = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[أإآ]/g, 'ا')
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي');
-
-const renderCategories = (cats) => {
-  const list = document.getElementById('categories-list');
-  list.innerHTML = '';
-  if (!cats.length) {
-    list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام مطابقة');
-    return;
-  }
-  const parentMap = Object.fromEntries(
-    allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
-  );
-  cats.forEach((data) => {
-    const parentLabel = data.parentId ? parentMap[data.parentId] : null;
-    const safeName = escapeHtml(data.name);
-    const badge = parentLabel
-      ? `<div class="order-meta"><i class="fa-solid fa-folder-tree"></i> فرعي ضمن: ${escapeHtml(parentLabel)}</div>`
-      : `<div class="order-meta"><i class="fa-solid fa-layer-group"></i> قسم رئيسي</div>`;
-    list.innerHTML += `<div class="card-3d">
-            <img src="${escapeHtml(data.image || '')}" alt="${safeName}" onerror="this.style.display='none'">
-            <div class="card-title">${safeName}</div>
-            ${badge}
-            <div class="card-actions">
-                <button class="btn-action edit" onclick="editCategory('${data.id}', '${jsStr(data.name)}', '${jsStr(data.parentId || '')}')"><i class="fa-solid fa-pen"></i> تعديل</button>
-                <button class="btn-action delete" onclick="deleteDocItem('categories', '${data.id}', null, loadCategories)"><i class="fa-solid fa-trash"></i> حذف</button>
-            </div>
-        </div>`;
-  });
-};
-
-window.filterCategories = (term) => {
-  const q = normalizeSearch(term);
-  if (!q) {
-    renderCategories(allCategories);
-    return;
-  }
-  const parentMap = Object.fromEntries(
-    allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
-  );
-  renderCategories(
-    allCategories.filter((c) => {
-      const parentName = c.parentId ? parentMap[c.parentId] || '' : '';
-      return (
-        normalizeSearch(c.name).includes(q) || normalizeSearch(parentName).includes(q)
-      );
-    }),
-  );
-};
-
 window.loadCategories = async () => {
-  const list = document.getElementById('categories-list');
-  list.innerHTML = loadingState();
-  try {
-    allCategories = (await CategoriesApi.list()) || [];
-    await loadParentCategoriesForSelect('cat-parent');
-    if (!allCategories.length) {
-      list.innerHTML = emptyState('fa-layer-group', 'لا توجد أقسام بعد');
-      return;
-    }
-    const searchBox = document.getElementById('cat-search');
-    window.filterCategories(searchBox ? searchBox.value : '');
-  } catch (e) {
-    list.innerHTML = emptyState('fa-triangle-exclamation', e.message || 'خطأ');
-  }
+  await loadParentCategoriesForSelect('cat-parent');
+  await loadCategoriesTable();
 };
 
 window.editCategory = async (id, name, parentId = '') => {
@@ -593,7 +541,7 @@ window.editCategory = async (id, name, parentId = '') => {
 window.loadCategoriesForSelect = async () => {
   const select = document.getElementById('prod-cat');
   select.innerHTML = '<option value="">اختر القسم</option>';
-  allCategories = (await CategoriesApi.list()) || [];
+  allCategories = (await CategoriesApi.listAdminAll()) || [];
   const parentMap = Object.fromEntries(
     allCategories.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
   );
@@ -611,6 +559,9 @@ window.saveProduct = async () => {
   const categoryId = document.getElementById('prod-cat').value;
   const desc = document.getElementById('prod-desc').value;
   const price = document.getElementById('prod-price').value;
+  const stock = document.getElementById('prod-stock')?.value;
+  const sku = document.getElementById('prod-sku')?.value?.trim();
+  const barcode = document.getElementById('prod-barcode')?.value?.trim();
   const files = document.getElementById('prod-images').files;
   if (!name || !price) return showCustomAlert('أكمل البيانات');
   if (!id && !categoryId) return showCustomAlert('اختر القسم');
@@ -621,6 +572,9 @@ window.saveProduct = async () => {
       name,
       description: desc || undefined,
       price: Number(price),
+      stock: stock !== undefined && stock !== '' ? Number(stock) : undefined,
+      sku: sku || undefined,
+      barcode: barcode || undefined,
     };
     if (categoryId) body.categoryId = categoryId;
     if (files.length > 0) {
@@ -632,7 +586,6 @@ window.saveProduct = async () => {
     }
     if (id) {
       if (!body.image && !files.length) {
-        // keep existing images on update without new files
         delete body.image;
         delete body.image1;
         delete body.images;
@@ -647,6 +600,9 @@ window.saveProduct = async () => {
     document.getElementById('prod-name').value = '';
     document.getElementById('prod-desc').value = '';
     document.getElementById('prod-price').value = '';
+    if (document.getElementById('prod-stock')) document.getElementById('prod-stock').value = '0';
+    if (document.getElementById('prod-sku')) document.getElementById('prod-sku').value = '';
+    if (document.getElementById('prod-barcode')) document.getElementById('prod-barcode').value = '';
     document.getElementById('prod-images').value = '';
     switchTab('products');
   } catch (e) {
@@ -656,74 +612,20 @@ window.saveProduct = async () => {
   btn.innerHTML = 'حفظ المنتج <i class="fa-solid fa-save"></i>';
 };
 
-let allProductsCache = [];
-
-const renderProducts = (products) => {
-  const list = document.getElementById('products-list');
-  list.innerHTML = '';
-  if (!products.length) {
-    list.innerHTML = emptyState('fa-box', 'لا توجد منتجات مطابقة');
-    return;
-  }
-  products.forEach((data) => {
-    const imgSrc =
-      (data.images && data.images.length > 0 && data.images[0].data) ||
-      data.image1 ||
-      data.image ||
-      '';
-    const catName = data.category?.name || '';
-    const safeName = escapeHtml(data.name);
-    list.innerHTML += `<div class="card-3d">
-            <img src="${escapeHtml(imgSrc)}" alt="${safeName}" onerror="this.style.display='none'">
-            <div class="card-title">${safeName}</div>
-            <div class="card-price">${num(data.price).toLocaleString('ar-IQ')} د.ع</div>
-            ${catName ? `<div style="font-size:0.78rem;color:#94A396;margin-bottom:4px">${escapeHtml(catName)}</div>` : ''}
-            <div class="card-actions">
-                <button class="btn-action edit" onclick="editProduct('${data.id}', '${jsStr(data.name)}', '${jsStr(data.categoryId)}', '${jsStr(data.description || '')}', '${num(data.price)}')"><i class="fa-solid fa-pen"></i> تعديل</button>
-                <button class="btn-action delete" onclick="deleteDocItem('products', '${data.id}', null, loadProducts)"><i class="fa-solid fa-trash"></i> حذف</button>
-            </div>
-        </div>`;
-  });
-};
-
-window.filterProducts = (term) => {
-  const q = normalizeSearch(term);
-  if (!q) {
-    renderProducts(allProductsCache);
-    return;
-  }
-  renderProducts(
-    allProductsCache.filter(
-      (p) =>
-        normalizeSearch(p.name).includes(q) ||
-        normalizeSearch(p.category?.name).includes(q) ||
-        normalizeSearch(p.description).includes(q),
-    ),
-  );
-};
-
 window.loadProducts = async () => {
-  const list = document.getElementById('products-list');
-  list.innerHTML = loadingState();
-  try {
-    allProductsCache = (await ProductsApi.list()) || [];
-    if (!allProductsCache.length) {
-      list.innerHTML = emptyState('fa-box', 'لا توجد منتجات بعد');
-      return;
-    }
-    const searchBox = document.getElementById('prod-search');
-    window.filterProducts(searchBox ? searchBox.value : '');
-  } catch (e) {
-    list.innerHTML = emptyState('fa-triangle-exclamation', e.message || 'خطأ');
-  }
+  await loadProductsTable();
 };
 
-window.editProduct = (id, name, categoryId, desc, price) => {
+window.editProduct = (id, name, categoryId, desc, price, stock = 0, sku = '', barcode = '') => {
   document.getElementById('prod-id').value = id;
   document.getElementById('prod-name').value = name;
   document.getElementById('prod-cat').value = categoryId;
   document.getElementById('prod-desc').value = desc;
   document.getElementById('prod-price').value = price;
+  if (document.getElementById('prod-stock')) document.getElementById('prod-stock').value = stock;
+  if (document.getElementById('prod-sku')) document.getElementById('prod-sku').value = sku;
+  if (document.getElementById('prod-barcode'))
+    document.getElementById('prod-barcode').value = barcode;
   document.getElementById('btn-save-prod').innerText = 'تحديث المنتج';
   window.scrollTo(0, 0);
 };
@@ -949,9 +851,11 @@ window.loadOrders = async (status) => {
             <div class="order-meta"><strong>تاريخ الطلب:</strong> ${formatOrderDateTime(data.createdAt)}</div>
             ${data.isScheduled && data.scheduledAt ? `<div class="order-meta order-scheduled"><strong>⏰ توصيل مجدول:</strong> ${formatOrderDateTime(data.scheduledAt)}</div>` : ''}
             ${data.statusUpdatedAt ? `<div class="order-meta"><strong>آخر تحديث:</strong> ${formatOrderDateTime(data.statusUpdatedAt)}</div>` : ''}
+            ${data.driver ? `<div class="order-meta"><i class="fa-solid fa-motorcycle"></i> المندوب: ${escapeHtml(data.driver.name || data.driver.username || '')}</div>` : ''}
+            ${data.acceptedAt ? `<div class="order-meta" style="color:#145528;font-weight:700">Driver Accepted ✓</div>` : ''}
             <div class="order-items">${itemsHtml || '<div class="order-meta">لا توجد تفاصيل</div>'}</div>
             <div class="order-total">الإجمالي: ${num(data.total).toLocaleString('ar-IQ')} د.ع</div>
-            <div class="order-actions">${buildOrderActionButtons(data.id, data.status, status)}</div>
+            <div class="order-actions">${buildOrderActionButtons(data.id, data.status, status)} ${buildAssignButton(data)}</div>
         </div>`;
     });
 
@@ -1099,4 +1003,6 @@ window.enableBrowserNotifications = async () => {
 window.setupWebPushNotifications = async () => {};
 window.updatePwaInstallButtons = () => {};
 
+wireLoginMode();
+wireCatalogFilters();
 initAdminSession();

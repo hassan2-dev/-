@@ -63,10 +63,32 @@ export class CreateProductDto {
   @IsString()
   image2?: string;
 
-  @ApiPropertyOptional({ type: [Object] })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsArray()
   images?: { id: string; data: string }[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  stock?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sku?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class UpdateProductDto {
@@ -133,4 +155,21 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  stock?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sku?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  barcode?: string | null;
 }

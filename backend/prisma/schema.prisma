@@ -10,6 +10,12 @@ datasource db {
 enum Role {
   CUSTOMER
   ADMIN
+  DRIVER
+}
+
+enum PresenceStatus {
+  ONLINE
+  OFFLINE
 }
 
 enum OrderStatus {
@@ -19,26 +25,36 @@ enum OrderStatus {
   ON_THE_WAY
   DELIVERED
   CANCELLED
+  DELIVERY_FAILED
 }
 
 model User {
-  id           String         @id @default(cuid())
-  phone        String         @unique
-  name         String?
-  email        String?
-  address      String?
-  apartment    Json?
-  role         Role           @default(CUSTOMER)
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  orders       Order[]
+  id            String          @id @default(cuid())
+  phone         String          @unique
+  name          String?
+  email         String?
+  address       String?
+  apartment     Json?
+  role          Role            @default(CUSTOMER)
+  username      String?         @unique
+  passwordHash  String?
+  presence      PresenceStatus  @default(OFFLINE)
+  lastSeen      DateTime?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  orders        Order[]         @relation("CustomerOrders")
+  driverOrders  Order[]         @relation("DriverOrders")
   notifications Notification[]
-  pushTokens   PushToken[]
+  pushTokens    PushToken[]
   refreshTokens RefreshToken[]
-  auditLogs    AuditLog[]
+  auditLogs     AuditLog[]
+  driverSessions DriverSession[]
+  timelineEvents OrderTimeline[]
 
   @@index([phone])
+  @@index([role])
+  @@index([username])
   @@map("users")
 }
 
@@ -68,20 +84,37 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model DriverSession {
+  id       String    @id @default(cuid())
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip       String?
+  device   String?
+  loginAt  DateTime  @default(now())
+  logoutAt DateTime?
+
+  @@index([userId])
+  @@index([loginAt])
+  @@map("driver_sessions")
+}
+
 model Category {
-  id             String     @id @default(cuid())
-  name           String
-  image          String
-  parentId       String?
-  parent         Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children       Category[] @relation("CategoryTree")
-  products       Product[]
-  legacyId       String?    @unique
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id        String     @id @default(cuid())
+  name      String
+  image     String
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+  isActive  Boolean    @default(true)
+  legacyId  String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@index([parentId])
   @@index([name])
+  @@index([isActive])
+  @@index([createdAt])
   @@map("categories")
 }
 
@@ -100,6 +133,9 @@ model Product {
   image2          String?
   images          Json?
   isActive        Boolean  @default(true)
+  stock           Int      @default(0)
+  sku             String?
+  barcode         String?
   legacyId        String?  @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -107,6 +143,10 @@ model Product {
   @@index([categoryId])
   @@index([name])
   @@index([updatedAt])
+  @@index([createdAt])
+  @@index([isActive])
+  @@index([sku])
+  @@index([barcode])
   @@map("products")
 }
 
@@ -137,7 +177,9 @@ model Offer {
 model Order {
   id              String      @id @default(cuid())
   userId          String?
-  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user            User?       @relation("CustomerOrders", fields: [userId], references: [id], onDelete: SetNull)
+  driverId        String?
+  driver          User?       @relation("DriverOrders", fields: [driverId], references: [id], onDelete: SetNull)
   name            String
   phone           String
   address         String
@@ -146,20 +188,43 @@ model Order {
   total           Decimal     @db.Decimal(12, 2)
   totalDiscount   Decimal     @default(0) @db.Decimal(12, 2)
   status          OrderStatus @default(PENDING)
+  paymentMethod   String?
   isScheduled     Boolean     @default(false)
   scheduledAt     DateTime?
   statusUpdatedAt DateTime?
   updatedBy       String?
+  assignedAt      DateTime?
+  acceptedAt      DateTime?
+  pickedAt        DateTime?
+  deliveredAt     DateTime?
+  failedAt        DateTime?
   legacyId        String?     @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   notifications   Notification[]
+  timeline        OrderTimeline[]
 
   @@index([phone])
   @@index([userId])
+  @@index([driverId])
   @@index([status])
   @@index([createdAt])
   @@map("orders")
+}
+
+model OrderTimeline {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  note      String?
+  createdBy String?
+  actor     User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_timeline")
 }
 
 model Notification {
@@ -201,18 +266,18 @@ model PushToken {
 }
 
 model StoreSettings {
-  id                 String   @id @default("store")
-  openTime           String   @default("09:00")
-  closeTime          String   @default("22:00")
-  timezone           String   @default("Asia/Baghdad")
-  enabled            Boolean  @default(true)
-  forceUpdate        Boolean  @default(false)
-  minIosVersion      String?
-  minAndroidVersion  String?
-  updateMessage      String?
-  iosStoreUrl        String?
-  androidStoreUrl    String?
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default("store")
+  openTime          String   @default("09:00")
+  closeTime         String   @default("22:00")
+  timezone          String   @default("Asia/Baghdad")
+  enabled           Boolean  @default(true)
+  forceUpdate       Boolean  @default(false)
+  minIosVersion     String?
+  minAndroidVersion String?
+  updateMessage     String?
+  iosStoreUrl       String?
+  androidStoreUrl   String?
+  updatedAt         DateTime @updatedAt
 
   @@map("store_settings")
 }
@@ -225,15 +290,15 @@ model CatalogMeta {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  userId     String?
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action     String
-  entity     String
-  entityId   String?
-  metadata   Json?
-  ip         String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
 
   @@index([entity, entityId])
   @@index([userId])

@@ -83,19 +83,36 @@ export async function api(path, options = {}) {
   }
 
   if (!res.ok) {
-    const msg =
+    const err = new Error(
       (Array.isArray(json?.message) ? json.message.join(', ') : json?.message) ||
-      json?.error ||
-      `HTTP ${res.status}`;
-    throw new Error(msg);
+        json?.error ||
+        `HTTP ${res.status}`,
+    );
+    err.status = res.status;
+    err.payload = json?.data ?? json;
+    throw err;
   }
 
   return unwrap(json);
 }
 
+function qs(params = {}) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+  });
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
 export const AuthApi = {
   adminLogin: (username, password) =>
     api('/auth/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  driverLogin: (username, password) =>
+    api('/auth/driver/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
@@ -115,18 +132,32 @@ export const AuthApi = {
 
 export const CategoriesApi = {
   list: () => api('/categories'),
+  listAdminAll: () => api('/categories/admin/all'),
+  listAdmin: (params) => api(`/categories/admin${qs(params)}`),
   create: (body) => api('/categories', { method: 'POST', body: JSON.stringify(body) }),
   update: (id, body) =>
     api(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id) => api(`/categories/${id}`, { method: 'DELETE' }),
+  bulkDelete: (ids) =>
+    api('/categories/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 };
 
 export const ProductsApi = {
   list: () => api('/products'),
+  listAdmin: (params) => api(`/products/admin${qs(params)}`),
+  exportUrl: (params) => `${API_BASE}/products/export${qs({ format: 'csv', ...params })}`,
   create: (body) => api('/products', { method: 'POST', body: JSON.stringify(body) }),
   update: (id, body) =>
     api(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id) => api(`/products/${id}`, { method: 'DELETE' }),
+  bulkDelete: (ids) =>
+    api('/products/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 };
 
 export const BannersApi = {
@@ -144,11 +175,33 @@ export const OffersApi = {
 export const OrdersApi = {
   list: (status) =>
     api(status ? `/orders?status=${encodeURIComponent(status)}` : '/orders'),
+  mineDriver: () => api('/orders/mine-driver'),
   updateStatus: (id, status) =>
     api(`/orders/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  assign: (id, driverId, confirmReassign = false) =>
+    api(`/orders/${id}/assign`, {
+      method: 'PATCH',
+      body: JSON.stringify({ driverId, confirmReassign }),
+    }),
+};
+
+export const DriversApi = {
+  list: () => api('/drivers'),
+  stats: () => api('/drivers/stats'),
+  todayStats: () => api('/drivers/me/today-stats'),
+  orders: (id) => api(`/drivers/${id}/orders`),
+  create: (body) => api('/drivers', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id, body) =>
+    api(`/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  resetPassword: (id, password) =>
+    api(`/drivers/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  remove: (id) => api(`/drivers/${id}`, { method: 'DELETE' }),
 };
 
 export const SettingsApi = {

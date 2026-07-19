@@ -12,6 +12,7 @@ import { OrderStatus, Role } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
+import { AssignDriverDto } from '../drivers/dto/driver.dto';
 import { OrdersService } from './orders.service';
 
 @ApiTags('orders')
@@ -30,6 +31,12 @@ export class OrdersController {
     return this.orders.findMine(user);
   }
 
+  @Roles(Role.DRIVER)
+  @Get('mine-driver')
+  mineDriver(@CurrentUser() user: AuthUser) {
+    return this.orders.findMineDriver(user);
+  }
+
   @Roles(Role.ADMIN)
   @Get()
   findAll(@Query('status') status?: OrderStatus) {
@@ -42,6 +49,16 @@ export class OrdersController {
   }
 
   @Roles(Role.ADMIN)
+  @Patch(':id/assign')
+  assign(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: AssignDriverDto,
+  ) {
+    return this.orders.assignDriver(id, user, dto);
+  }
+
+  @Roles(Role.ADMIN, Role.DRIVER)
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,

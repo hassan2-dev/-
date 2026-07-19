@@ -26,7 +26,12 @@
         <img src="/assets/icon.png" alt="شعار تفاحة" class="brand-logo" width="88" height="88" />
       </div>
       <h1>متجر تفاحة</h1>
-      <p>لوحة تشغيل المتجر</p>
+      <p>لوحة التشغيل والمندوبين</p>
+
+      <div class="login-tabs">
+        <button type="button" class="login-tab active" id="login-tab-admin" onclick="setLoginMode('admin')">أدمن</button>
+        <button type="button" class="login-tab" id="login-tab-driver" onclick="setLoginMode('driver')">مندوب</button>
+      </div>
 
       <div id="login-form">
         <label class="field-label" for="admin-username">اسم المستخدم</label>
@@ -91,6 +96,14 @@
             <i class="fa-solid fa-percent"></i> الخصومات
           </button>
 
+          <div class="nav-group-label">التوصيل</div>
+          <button class="nav-item nav-admin-only" onclick="switchTab('drivers')">
+            <i class="fa-solid fa-motorcycle"></i> المندوبون
+          </button>
+          <button class="nav-item nav-driver-only hidden" onclick="switchTab('driver-orders')">
+            <i class="fa-solid fa-clipboard-list"></i> طلباتي
+          </button>
+
           <div class="nav-group-label">التسويق</div>
           <button class="nav-item" onclick="switchTab('offers')">
             <i class="fa-solid fa-tags"></i> العروض
@@ -130,7 +143,7 @@
               <img src="/assets/icon.png" alt="" class="pwa-install-logo" width="22" height="22" />
               <span class="topbar-btn-label">تثبيت التطبيق</span>
             </button>
-            <span class="topbar-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
+            <span class="topbar-badge" id="role-badge"><i class="fa-solid fa-shield-halved"></i> أدمن</span>
             <button type="button" class="logout-btn" onclick="logoutAdmin()" title="تسجيل الخروج">
               <i class="fa-solid fa-right-from-bracket"></i>
               <span class="topbar-btn-label">خروج</span>
@@ -198,16 +211,46 @@
                 <i class="fa-solid fa-list"></i>
                 <h2>الأقسام الحالية</h2>
               </div>
-              <div class="list-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input
-                  type="search"
-                  id="cat-search"
-                  placeholder="ابحث عن قسم..."
-                  oninput="filterCategories(this.value)"
-                />
+              <div class="table-toolbar">
+                <div class="list-search">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="cat-search" placeholder="ابحث عن قسم..." />
+                </div>
+                <select id="cat-filter-status">
+                  <option value="">كل الحالات</option>
+                  <option value="active">نشط</option>
+                  <option value="hidden">مخفي</option>
+                </select>
+                <select id="cat-sort">
+                  <option value="newest">الأحدث</option>
+                  <option value="oldest">الأقدم</option>
+                  <option value="name_asc">الاسم</option>
+                </select>
+                <select id="cat-page-size">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <button type="button" class="btn-danger-outline" onclick="bulkDeleteCategories()">حذف المحدد</button>
               </div>
-              <div id="categories-list" class="cards-grid"></div>
+              <div class="table-wrap">
+                <table class="data-table" id="categories-table">
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="cat-select-all" onclick="toggleCatSelectAll(this.checked)" /></th>
+                      <th>الصورة</th>
+                      <th>اسم القسم</th>
+                      <th>عدد المنتجات</th>
+                      <th>الحالة</th>
+                      <th>تاريخ الإنشاء</th>
+                      <th>الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="categories-list"></tbody>
+                </table>
+              </div>
+              <div class="pagination-bar" id="cat-pagination"></div>
             </div>
           </div>
 
@@ -232,6 +275,18 @@
                   <label for="prod-price">السعر (د.ع)</label>
                   <input type="number" id="prod-price" placeholder="0" min="0" />
                 </div>
+                <div class="form-field">
+                  <label for="prod-stock">المخزون</label>
+                  <input type="number" id="prod-stock" placeholder="0" min="0" value="0" />
+                </div>
+                <div class="form-field">
+                  <label for="prod-sku">SKU</label>
+                  <input type="text" id="prod-sku" placeholder="SKU-001" />
+                </div>
+                <div class="form-field">
+                  <label for="prod-barcode">Barcode</label>
+                  <input type="text" id="prod-barcode" placeholder="628..." />
+                </div>
                 <div class="form-field full">
                   <label for="prod-desc">الوصف</label>
                   <textarea id="prod-desc" placeholder="وصف مختصر للمنتج"></textarea>
@@ -253,16 +308,54 @@
                 <i class="fa-solid fa-boxes-stacked"></i>
                 <h2>المنتجات الحالية</h2>
               </div>
-              <div class="list-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input
-                  type="search"
-                  id="prod-search"
-                  placeholder="ابحث عن منتج بالاسم أو القسم..."
-                  oninput="filterProducts(this.value)"
-                />
+              <div class="table-toolbar">
+                <div class="list-search">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="prod-search" placeholder="اسم / وصف / SKU / باركود..." />
+                </div>
+                <select id="prod-filter-cat"><option value="">كل الأقسام</option></select>
+                <select id="prod-filter-status">
+                  <option value="">كل الحالات</option>
+                  <option value="active">نشط</option>
+                  <option value="hidden">مخفي</option>
+                  <option value="out_of_stock">نافد</option>
+                </select>
+                <select id="prod-sort">
+                  <option value="newest">الأحدث إضافة</option>
+                  <option value="updated">آخر تعديل</option>
+                  <option value="oldest">الأقدم</option>
+                  <option value="name_asc">الاسم</option>
+                  <option value="price_desc">الأعلى سعراً</option>
+                  <option value="price_asc">الأقل سعراً</option>
+                </select>
+                <select id="prod-page-size">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <button type="button" class="btn-primary btn-success" onclick="exportProductsCsv()">تصدير CSV</button>
+                <button type="button" class="btn-danger-outline" onclick="bulkDeleteProducts()">حذف المحدد</button>
               </div>
-              <div id="products-list" class="cards-grid"></div>
+              <div class="table-wrap">
+                <table class="data-table" id="products-table">
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="prod-select-all" onclick="toggleProdSelectAll(this.checked)" /></th>
+                      <th>الصورة</th>
+                      <th>اسم المنتج</th>
+                      <th>القسم</th>
+                      <th>السعر</th>
+                      <th>الحالة</th>
+                      <th>المخزون</th>
+                      <th>تاريخ الإنشاء</th>
+                      <th>الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="products-list"></tbody>
+                </table>
+              </div>
+              <div class="pagination-bar" id="prod-pagination"></div>
             </div>
           </div>
 
@@ -474,6 +567,73 @@
             </div>
           </div>
 
+          <!-- المندوبون -->
+          <div id="drivers" class="tab-content">
+            <div id="drivers-stats" class="stats-grid"></div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-user-plus"></i>
+                <h2>إضافة / تعديل مندوب</h2>
+              </div>
+              <input type="hidden" id="driver-id" />
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="driver-name">الاسم</label>
+                  <input type="text" id="driver-name" placeholder="أحمد" />
+                </div>
+                <div class="form-field">
+                  <label for="driver-username">اسم المستخدم</label>
+                  <input type="text" id="driver-username" placeholder="driver01" />
+                </div>
+                <div class="form-field">
+                  <label for="driver-phone">الهاتف</label>
+                  <input type="tel" id="driver-phone" placeholder="07XXXXXXXXX" />
+                </div>
+                <div class="form-field">
+                  <label for="driver-password">كلمة المرور</label>
+                  <input type="password" id="driver-password" placeholder="••••••••" />
+                </div>
+              </div>
+              <button class="btn-primary" onclick="saveDriver()">
+                <i class="fa-solid fa-save"></i> حفظ المندوب
+              </button>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-motorcycle"></i>
+                <h2>المندوبون</h2>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>الاسم</th>
+                      <th>اليوزر</th>
+                      <th>الهاتف</th>
+                      <th>الحالة</th>
+                      <th>آخر نشاط</th>
+                      <th>الطلبات الحالية</th>
+                      <th>الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="drivers-list"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- طلبات المندوب -->
+          <div id="driver-orders" class="tab-content">
+            <div id="driver-today-stats" class="stats-grid"></div>
+            <div class="panel">
+              <div class="panel-header">
+                <i class="fa-solid fa-clipboard-list"></i>
+                <h2>طلباتي</h2>
+              </div>
+              <div id="driver-orders-list" class="cards-grid wide"></div>
+            </div>
+          </div>
+
           <!-- أوقات العمل -->
           <div id="store-settings" class="tab-content">
             <div class="panel">
@@ -543,6 +703,17 @@
     </div>
   </div>
 
+  <!-- Assign driver dialog -->
+  <div id="assign-driver-modal" class="pwa-install-modal hidden" role="dialog" aria-modal="true">
+    <div class="pwa-install-modal-backdrop" onclick="closeAssignDriverModal()"></div>
+    <div class="pwa-install-modal-card" style="max-width:420px;text-align:right">
+      <h2>تعيين مندوب</h2>
+      <p class="pwa-install-modal-desc" id="assign-driver-order-label"></p>
+      <div id="assign-driver-list" class="assign-driver-list"></div>
+      <button type="button" class="pwa-install-modal-later" onclick="closeAssignDriverModal()">إلغاء</button>
+    </div>
+  </div>
+
   <!-- نافذة تثبيت PWA -->
   <div id="pwa-install-modal" class="pwa-install-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pwa-install-modal-title">
     <div class="pwa-install-modal-backdrop" onclick="closePwaInstallModal()"></div>
@@ -583,6 +754,8 @@
       sales: { title: 'المبيعات', sub: 'إجمالي الإيرادات' },
       notifications: { title: 'الإشعارات', sub: 'إرسال وإدارة إشعارات الزبائن' },
       'store-settings': { title: 'أوقات العمل', sub: 'تحديد ساعات استقبال الطلبات' },
+      drivers: { title: 'المندوبون', sub: 'إدارة حسابات التوصيل' },
+      'driver-orders': { title: 'طلباتي', sub: 'الطلبات المعيّنة لك' },
     };
 
     window.setAdminPageTitle = (tabId) => {

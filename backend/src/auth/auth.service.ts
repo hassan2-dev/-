@@ -6,13 +6,19 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
+import { Role, PresenceStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomInt, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SMS_PROVIDER, SmsProvider } from '../common/sms/sms-provider.interface';
 import { isValidIraqiMobile, normalizeIraqiPhone } from '../common/utils/phone.util';
-import { AdminLoginDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import {
+  AdminLoginDto,
+  DriverLoginDto,
+  RequestOtpDto,
+  VerifyOtpDto,
+} from './dto/auth.dto';
+import { OPEN_DRIVER_ORDER_STATUSES } from '../common/utils/driver-status.util';
 
 @Injectable()
 export class AuthService {
@@ -165,6 +171,56 @@ export class AuthService {
     return this.issueTokens(user.id, user.phone, user.role);
   }
 
+  async driverLogin(
+    dto: DriverLoginDto,
+    meta: { ip?: string | null; device?: string | null } = {},
+  ) {
+    const username = String(dto.username || '')
+      .trim()
+      .toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    if (!user || user.role !== Role.DRIVER || !user.passwordHash) {
+      throw new UnauthorizedException('اسم المستخدم أو كلمة المرور غير صحيحة');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException('الحساب غير مفعّل');
+    }
+
+    const ok = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('اسم المستخدم أو كلمة المرور غير صحيحة');
+    }
+
+    const openCount = await this.prisma.order.count({
+      where: {
+        driverId: user.id,
+        status: { in: OPEN_DRIVER_ORDER_STATUSES },
+      },
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        presence: PresenceStatus.ONLINE,
+        lastSeen: new Date(),
+      },
+    });
+
+    await this.prisma.driverSession.create({
+      data: {
+        userId: user.id,
+        ip: meta.ip || null,
+        device: meta.device || null,
+      },
+    });
+
+    const tokens = await this.issueTokens(user.id, user.phone, Role.DRIVER);
+    return {
+      ...tokens,
+      openOrdersCount: openCount,
+    };
+  }
+
   private isReviewPhone(phone: string): boolean {
     const reviewPhone = normalizeIraqiPhone(
       this.config.get<string>('reviewAccount.phone', ''),
@@ -203,10 +259,36 @@ export class AuthService {
 
   async logout(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
     await this.prisma.refreshToken.updateMany({
       where: { tokenHash },
       data: { revoked: true },
     });
+
+    if (stored?.user?.role === Role.DRIVER) {
+      await this.prisma.user.update({
+        where: { id: stored.userId },
+        data: {
+          presence: PresenceStatus.OFFLINE,
+          lastSeen: new Date(),
+        },
+      });
+      const openSession = await this.prisma.driverSession.findFirst({
+        where: { userId: stored.userId, logoutAt: null },
+        orderBy: { loginAt: 'desc' },
+      });
+      if (openSession) {
+        await this.prisma.driverSession.update({
+          where: { id: openSession.id },
+          data: { logoutAt: new Date() },
+        });
+      }
+    }
+
     return { ok: true };
   }
 
@@ -252,6 +334,7 @@ export class AuthService {
         phone: user.phone,
         name: user.name,
         role: user.role,
+        username: user.username,
         address: user.address,
         apartment: user.apartment,
       },

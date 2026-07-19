@@ -1,5 +1,5 @@
-import { IsString, Matches, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RequestOtpDto {
   @ApiProperty({ example: '07801234567' })
@@ -37,4 +37,21 @@ export class AdminLoginDto {
   @IsString()
   @MinLength(1)
   password!: string;
+}
+
+export class DriverLoginDto {
+  @ApiProperty({ example: 'driver01' })
+  @IsString()
+  @MinLength(1)
+  username!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  password!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  device?: string;
 }
