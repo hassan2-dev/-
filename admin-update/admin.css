@@ -667,6 +667,41 @@ main {
   gap: 1rem;
 }
 
+.list-search {
+  position: relative;
+  margin-bottom: 1.1rem;
+}
+
+.list-search i {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.list-search input {
+  width: 100%;
+  padding: 0.8rem 2.6rem 0.8rem 1rem;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.92rem;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.list-search input:focus {
+  outline: none;
+  border-color: var(--brand);
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--brand-glow);
+}
+
+.list-search input::placeholder { color: var(--ink-2); opacity: 0.75; }
+
 .cards-grid.wide {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
