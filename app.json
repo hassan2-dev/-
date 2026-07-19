@@ -3,13 +3,21 @@
     "name": "متجر تفاحة",
     "slug": "tufaha-store",
     "owner": "hassune21",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "supportsRTL": true,
     "scheme": "tofahastore",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1767f9db-925b-4a14-b0b2-1c8e68ab658f",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
