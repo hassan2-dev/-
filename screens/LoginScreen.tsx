@@ -4,10 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   TextInput,
-  KeyboardAvoidingView,
+  ScrollView,
   Platform,
+  type TextInput as TextInputType,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,12 +28,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const phoneInputRef = useRef<TextInputType>(null);
+  const codeInputRef = useRef<TextInputType>(null);
 
   useEffect(() => {
     return () => {
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (step === 'phone') phoneInputRef.current?.focus();
+      else codeInputRef.current?.focus();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [step]);
 
   const startResendCooldown = (seconds = 60) => {
     if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
@@ -56,6 +68,7 @@ export default function LoginScreen() {
     }
     if (!phone.trim()) {
       showToast('أدخل رقم الهاتف');
+      phoneInputRef.current?.focus();
       return;
     }
     setLoading(true);
@@ -72,6 +85,7 @@ export default function LoginScreen() {
     if (loading) return;
     if (code.trim().length < 4) {
       showToast('أدخل رمز التحقق');
+      codeInputRef.current?.focus();
       return;
     }
     setLoading(true);
@@ -81,17 +95,20 @@ export default function LoginScreen() {
 
   return (
     <GlassBackground>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
           styles.container,
           {
             paddingTop: insets.top + 60,
             paddingBottom: getFooterBottomPadding(insets.bottom, { extra: Spacing.xl }),
           },
         ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        bounces={false}
       >
-        <View style={styles.logoSpacer}>
+        <View style={styles.logoSpacer} pointerEvents="none">
           <AppBrandLogo size={120} />
         </View>
 
@@ -106,21 +123,39 @@ export default function LoginScreen() {
           {step === 'phone' ? (
             <View>
               <Text style={styles.label}>رقم الهاتف</Text>
-              <View style={styles.inputWrap}>
-                <Ionicons name="call-outline" size={21} color={Colors.primary} />
+              <Pressable
+                style={styles.inputWrap}
+                onPress={() => phoneInputRef.current?.focus()}
+                accessibilityRole="none"
+              >
+                <View pointerEvents="none">
+                  <Ionicons name="call-outline" size={21} color={Colors.primary} />
+                </View>
                 <TextInput
-                  style={styles.input}
+                  ref={phoneInputRef}
+                  style={[styles.input, styles.ltrField]}
                   value={phone}
                   onChangeText={setPhone}
                   placeholder="0780xxxxxxx"
                   placeholderTextColor={Colors.textGray}
                   keyboardType="phone-pad"
-                  textAlign="right"
+                  textContentType="telephoneNumber"
+                  autoComplete="tel"
+                  importantForAutofill="yes"
+                  // Digits are LTR — right-align + forced RTL breaks caret/focus on some iOS builds
+                  textAlign="left"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  spellCheck={false}
                   maxLength={14}
                   editable={!loading}
+                  autoFocus
+                  blurOnSubmit={false}
+                  returnKeyType="done"
                   onSubmitEditing={handleRequestOtp}
+                  accessibilityLabel="رقم الهاتف"
                 />
-              </View>
+              </Pressable>
               <TouchableOpacity
                 style={[styles.primaryBtn, resendCooldown > 0 && styles.btnDisabled]}
                 onPress={handleRequestOtp}
@@ -145,16 +180,24 @@ export default function LoginScreen() {
             <View>
               <Text style={styles.label}>رمز التحقق</Text>
               <TextInput
-                style={styles.codeInput}
+                ref={codeInputRef}
+                style={[styles.codeInput, styles.ltrField]}
                 value={code}
                 onChangeText={setCode}
                 placeholder="000000"
                 placeholderTextColor={Colors.textGray}
                 keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
                 textAlign="center"
+                autoCorrect={false}
                 maxLength={6}
                 editable={!loading}
+                autoFocus
+                blurOnSubmit={false}
+                returnKeyType="done"
                 onSubmitEditing={handleVerifyOtp}
+                accessibilityLabel="رمز التحقق"
               />
               <TouchableOpacity
                 style={styles.primaryBtn}
@@ -195,14 +238,17 @@ export default function LoginScreen() {
             </View>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </GlassBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.xl,
   },
   logoSpacer: {
@@ -215,6 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.glassBorder,
+    zIndex: 2,
   },
   title: {
     fontSize: FontSize.xl,
@@ -247,19 +294,25 @@ const styles = StyleSheet.create({
     borderColor: Colors.glassBorder,
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.lg,
+    minHeight: 52,
   },
   input: {
     flex: 1,
-    paddingVertical: Spacing.md,
+    minHeight: 48,
+    paddingVertical: Platform.OS === 'ios' ? Spacing.md : Spacing.sm,
     color: Colors.textDark,
     fontSize: FontSize.md,
     letterSpacing: 0,
+  },
+  ltrField: {
+    writingDirection: 'ltr',
   },
   codeInput: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: Colors.glassBorder,
+    minHeight: 52,
     paddingVertical: Spacing.md,
     color: Colors.textDark,
     fontSize: FontSize.xl,
