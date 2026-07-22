@@ -231,6 +231,15 @@ export async function logoutApi(): Promise<void> {
   await clearApiSession();
 }
 
+/** Permanently delete the authenticated account (Apple 5.1.1(v)). */
+export async function deleteMyAccount(): Promise<void> {
+  await apiRequest<{ deleted: boolean }>('/users/me', {
+    method: 'DELETE',
+    authenticated: true,
+  });
+  await clearApiSession();
+}
+
 function adaptCatalogItem(collection: string, raw: any): any {
   if (collection === 'products') {
     return normalizeProduct({

@@ -7,6 +7,8 @@ import {
   Linking,
   TextInput,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -49,6 +51,7 @@ export default function AccountScreen() {
   const tabBottomPadding = getTabBarBottomPadding(insets.bottom);
   const {
     logout,
+    deleteAccount,
     showToast,
     userPhone,
     userEmail,
@@ -59,6 +62,7 @@ export default function AccountScreen() {
     unreadNotificationCount,
   } = useApp();
   const [showProfileForm, setShowProfileForm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [savedAddressCode, setSavedAddressCode] = useState('');
@@ -114,6 +118,38 @@ export default function AccountScreen() {
     } catch {
       showToast('تعذر حفظ البيانات');
     }
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'حذف الحساب',
+      'هل أنت متأكد من حذف حسابك؟\n\nسيتم حذف جميع بياناتك نهائياً ولا يمكن استرجاعها.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'متابعة',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'تأكيد نهائي',
+              'هذا الإجراء لا يمكن التراجع عنه. هل تريد حذف حسابك الآن؟',
+              [
+                { text: 'إلغاء', style: 'cancel' },
+                {
+                  text: 'نعم، احذف حسابي',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setDeletingAccount(true);
+                    await deleteAccount();
+                    setDeletingAccount(false);
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const profileName = resolveUserDisplayName(userDisplayName, userEmail);
@@ -249,6 +285,21 @@ export default function AccountScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
           <AppIcon name="log-out-outline" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>تسجيل الخروج</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.deleteAccountBtn, deletingAccount && styles.deleteAccountBtnDisabled]}
+          onPress={confirmDeleteAccount}
+          disabled={deletingAccount}
+        >
+          {deletingAccount ? (
+            <ActivityIndicator size="small" color={Colors.danger} />
+          ) : (
+            <AppIcon name="trash-outline" size={20} color={Colors.danger} />
+          )}
+          <Text style={styles.deleteAccountText}>
+            {deletingAccount ? 'جاري حذف الحساب...' : 'حذف الحساب'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </GlassBackground>
@@ -387,4 +438,19 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   logoutText: { color: Colors.danger, fontWeight: '800', fontSize: FontSize.md },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  deleteAccountBtnDisabled: { opacity: 0.7 },
+  deleteAccountText: { color: Colors.danger, fontWeight: '800', fontSize: FontSize.md },
 });

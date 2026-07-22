@@ -31,7 +31,10 @@ export default function PrivacyPolicyScreen() {
 
         <Text style={styles.paragraph}>نحن لا نقوم ببيع أو مشاركة بيانات المستخدم مع أي طرف ثالث.</Text>
 
-        <Text style={styles.paragraph}>قد يستخدم التطبيق خدمات خارجية مثل Firebase (من Google) لتخزين البيانات وتحليل الأداء.</Text>
+        <Text style={styles.paragraph}>
+          يمكنك حذف حسابك وبياناتك الشخصية في أي وقت من داخل التطبيق عبر: حسابي ← حذف الحساب.
+          عند الحذف يتم إزالة بياناتك نهائياً ولا يمكن استرجاعها.
+        </Text>
 
         <Text style={styles.paragraph}>باستخدامك لهذا التطبيق، فإنك توافق على هذه السياسة.</Text>
 
@@ -43,7 +46,7 @@ export default function PrivacyPolicyScreen() {
 
         <Text style={styles.paragraphEn}>This application may collect basic information to improve user experience, including:</Text>
 
-        <Text style={styles.bulletItemEn}>• Login information (Google sign-in)</Text>
+        <Text style={styles.bulletItemEn}>• Login information (phone number and OTP)</Text>
         <Text style={styles.bulletItemEn}>• Usage data</Text>
         <Text style={styles.bulletItemEn}>• Order data</Text>
 
@@ -55,7 +58,9 @@ export default function PrivacyPolicyScreen() {
 
         <Text style={styles.paragraphEn}>We do not sell or share user data.</Text>
 
-        <Text style={styles.paragraphEn}>The app may use Firebase services provided by Google.</Text>
+        <Text style={styles.paragraphEn}>
+          You can permanently delete your account and personal data at any time from Account → Delete Account.
+        </Text>
 
         <Text style={styles.paragraphEn}>By using this app, you agree to this policy.</Text>
 

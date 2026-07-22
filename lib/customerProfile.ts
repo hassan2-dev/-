@@ -77,3 +77,11 @@ export async function persistApartmentIfComplete(
   if (!isApartmentSelectionComplete(apartment)) return null;
   return persistApartmentSelection(apartment, extras);
 }
+
+export async function clearCustomerProfile(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([PROFILE_KEY, LEGACY_PROFILE_KEY]);
+  } catch {
+    // ignore
+  }
+}
