@@ -16,6 +16,7 @@ import {
   readApiCachedCollection,
   registerApiPushToken,
   requestPhoneOtp,
+  SessionExpiredError,
   updateMyApiProfile,
   verifyPhoneOtp,
 } from '../lib/api';
@@ -277,6 +278,7 @@ export function AppProvider({ children }: { children: any }) {
 
       const cachedUser = await getStoredApiUser();
       if (cachedUser) {
+        setIsGuest(false);
         setUserEmail(cachedUser.email || null);
         setUserPhone(cachedUser.phone);
         setUserDisplayName(cachedUser.name || null);
@@ -290,9 +292,27 @@ export function AppProvider({ children }: { children: any }) {
       setUserDisplayName(user.name || null);
       setUserPhotoUrl(null);
       setIsLoggedIn(true);
-    } catch {
-      await logoutApi();
-      setIsLoggedIn(false);
+    } catch (error) {
+      // Only force logout when the refresh token was rejected.
+      // Network / 5xx must keep the cached session so users aren't asked for OTP again.
+      if (error instanceof SessionExpiredError || !(await hasApiSession())) {
+        await logoutApi();
+        setIsLoggedIn(false);
+        setIsGuest(false);
+        setUserEmail(null);
+        setUserPhone(null);
+        setUserDisplayName(null);
+        setUserPhotoUrl(null);
+      } else {
+        const cachedUser = await getStoredApiUser();
+        if (cachedUser) {
+          setIsGuest(false);
+          setUserEmail(cachedUser.email || null);
+          setUserPhone(cachedUser.phone);
+          setUserDisplayName(cachedUser.name || null);
+          setIsLoggedIn(true);
+        }
+      }
     } finally {
       setIsCheckingAuth(false);
     }

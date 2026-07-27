@@ -97,6 +97,14 @@ export async function clearApiSession(): Promise<void> {
   ]);
 }
 
+/** Thrown when the refresh token is rejected (user must log in again). */
+export class SessionExpiredError extends Error {
+  constructor(message = 'انتهت الجلسة، سجّل الدخول من جديد') {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
+
 async function refreshSession(): Promise<boolean> {
   const refreshToken = await getSecret(REFRESH_TOKEN_KEY);
   if (!refreshToken) return false;
@@ -108,13 +116,21 @@ async function refreshSession(): Promise<boolean> {
       body: JSON.stringify({ refreshToken }),
     });
     if (!response.ok) {
-      await clearApiSession();
+      // Only wipe tokens when the server rejects the refresh (401/403).
+      // 5xx / network-ish failures must keep the session for retry.
+      if (response.status === 401 || response.status === 403) {
+        await clearApiSession();
+      }
       return false;
     }
     const session = unwrap<AuthSession>(await response.json());
+    if (!session?.accessToken || !session?.refreshToken) {
+      return false;
+    }
     await saveSession(session);
     return true;
   } catch {
+    // Network / parse errors — keep stored tokens.
     return false;
   }
 }
@@ -147,6 +163,12 @@ async function apiRequest<T>(
     if (refreshed) {
       return apiRequest<T>(path, { ...options, retried: true });
     }
+    // Refresh rejected and tokens wiped → definitive logout.
+    if (!(await hasApiSession())) {
+      throw new SessionExpiredError();
+    }
+    // Tokens still present (e.g. refresh got 5xx) — temporary failure, keep session.
+    throw new Error('تعذر التحقق من الجلسة، حاول لاحقاً');
   }
 
   const text = await response.text();
@@ -162,6 +184,17 @@ async function apiRequest<T>(
     const message = Array.isArray(rawMessage)
       ? rawMessage.join('\n')
       : rawMessage || (payload as ApiEnvelope<T> | null)?.error;
+    if (response.status === 401 && authenticated) {
+      // Already retried (or no refresh path) — only expire if tokens were cleared.
+      if (!(await hasApiSession())) {
+        throw new SessionExpiredError(
+          typeof message === 'string' ? message : undefined
+        );
+      }
+      throw new Error(
+        typeof message === 'string' ? message : 'تعذر التحقق من الجلسة، حاول لاحقاً'
+      );
+    }
     if (response.status === 429) {
       throw new Error(
         message && !/too many requests/i.test(message)
@@ -191,6 +224,9 @@ export async function verifyPhoneOtp(phone: string, code: string): Promise<ApiUs
     method: 'POST',
     body: JSON.stringify({ phone, code }),
   });
+  if (!session?.accessToken || !session?.refreshToken || !session?.user) {
+    throw new Error('استجابة تسجيل الدخول غير مكتملة من السيرفر');
+  }
   await saveSession(session);
   return session.user;
 }
