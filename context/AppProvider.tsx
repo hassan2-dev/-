@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearApiCatalogCache,
   createApiOrder,
+  deleteMyAccount,
   fetchApiCatalogVersion,
   fetchApiCollectionCached,
   fetchApiStoreSettings,
@@ -36,6 +37,7 @@ import {
   isStoreOpen as checkStoreOpen,
   parseStoreSettings,
 } from '../lib/storeHours';
+import { clearCustomerProfile } from '../lib/customerProfile';
 
 export interface AppNotification {
   id: string;
@@ -76,6 +78,7 @@ interface AppContextType {
     apartment?: Record<string, unknown>;
   }) => Promise<boolean>;
   logout: () => void;
+  deleteAccount: () => Promise<boolean>;
 
   // Data
   categories: Category[];
@@ -480,16 +483,17 @@ export function AppProvider({ children }: { children: any }) {
     }
   }, [showToast]);
 
-  const logout = useCallback(async () => {
-    loggingOutRef.current = true;
-    await logoutApi();
-
+  const clearLocalSession = useCallback(async () => {
     setIsLoggedIn(false);
     setIsGuest(false);
     setUserEmail(null);
     setUserPhone(null);
     setUserDisplayName(null);
     setUserPhotoUrl(null);
+    setCart([]);
+    setFavorites([]);
+    setNotifications([]);
+    await clearCustomerProfile();
     await AsyncStorage.multiRemove([
       'is_logged_in',
       'is_guest',
@@ -498,11 +502,38 @@ export function AppProvider({ children }: { children: any }) {
       'auth_display_name',
       'auth_photo_url',
       'firebase_refresh_token',
+      'cart',
+      'favorites',
+      READ_NOTIFICATION_IDS_KEY,
       EXPO_PUSH_TOKEN_KEY,
     ]);
-
-    setTimeout(() => { loggingOutRef.current = false; }, 500);
   }, []);
+
+  const logout = useCallback(async () => {
+    loggingOutRef.current = true;
+    await logoutApi();
+    await clearLocalSession();
+    setTimeout(() => {
+      loggingOutRef.current = false;
+    }, 500);
+  }, [clearLocalSession]);
+
+  const deleteAccount = useCallback(async () => {
+    loggingOutRef.current = true;
+    try {
+      await deleteMyAccount();
+      await clearLocalSession();
+      showToast('تم حذف حسابك نهائياً');
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر حذف الحساب');
+      return false;
+    } finally {
+      setTimeout(() => {
+        loggingOutRef.current = false;
+      }, 500);
+    }
+  }, [clearLocalSession, showToast]);
 
   const syncPushToken = useCallback(async () => {
     if (!isLoggedIn || isGuest || (!userEmail && !userPhone)) return;
@@ -764,7 +795,7 @@ export function AppProvider({ children }: { children: any }) {
     <AppContext.Provider
       value={{
         isLoggedIn, isCheckingAuth, isGuest, userEmail, userPhone, userDisplayName, userPhotoUrl,
-        requestOtp, verifyOtp, updateProfile, logout,
+        requestOtp, verifyOtp, updateProfile, logout, deleteAccount,
         categories, products, banners, offers, dataLoading, refreshData, clearCacheAndRefresh,
         cart, addToCart, removeFromCart, updateCartItemQty, clearCart, getCartCount, getCartTotals,
         favorites, toggleFavorite, isFavorite,
