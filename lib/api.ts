@@ -105,34 +105,45 @@ export class SessionExpiredError extends Error {
   }
 }
 
-async function refreshSession(): Promise<boolean> {
-  const refreshToken = await getSecret(REFRESH_TOKEN_KEY);
-  if (!refreshToken) return false;
+/** One in-flight refresh — prevents parallel 401s from racing and wiping the session. */
+let refreshInFlight: Promise<boolean> | null = null;
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!response.ok) {
-      // Only wipe tokens when the server rejects the refresh (401/403).
-      // 5xx / network-ish failures must keep the session for retry.
-      if (response.status === 401 || response.status === 403) {
-        await clearApiSession();
+async function refreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = await getSecret(REFRESH_TOKEN_KEY);
+    if (!refreshToken) return false;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) {
+        // Only wipe tokens when the server rejects the refresh (401/403).
+        // 5xx / network-ish failures must keep the session for retry.
+        if (response.status === 401 || response.status === 403) {
+          await clearApiSession();
+        }
+        return false;
       }
+      const session = unwrap<AuthSession>(await response.json());
+      if (!session?.accessToken || !session?.refreshToken) {
+        return false;
+      }
+      await saveSession(session);
+      return true;
+    } catch {
+      // Network / parse errors — keep stored tokens.
       return false;
     }
-    const session = unwrap<AuthSession>(await response.json());
-    if (!session?.accessToken || !session?.refreshToken) {
-      return false;
-    }
-    await saveSession(session);
-    return true;
-  } catch {
-    // Network / parse errors — keep stored tokens.
-    return false;
-  }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
 }
 
 async function apiRequest<T>(

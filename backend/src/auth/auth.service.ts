@@ -241,8 +241,28 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('جلسة غير صالحة');
+    }
+
+    // Concurrent refresh race: first request already rotated this token.
+    // If a replacement was just issued, allow another issue instead of logging the user out.
+    if (stored.revoked) {
+      const recent = await this.prisma.refreshToken.findFirst({
+        where: {
+          userId: stored.userId,
+          createdAt: { gte: new Date(Date.now() - 60_000) },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!recent) {
+        throw new UnauthorizedException('جلسة غير صالحة');
+      }
+      return this.issueTokens(
+        stored.user.id,
+        stored.user.phone,
+        stored.user.role,
+      );
     }
 
     await this.prisma.refreshToken.update({
@@ -311,8 +331,7 @@ export class AuthService {
       },
     );
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    const expiresAt = this.refreshExpiresAt(refreshExpires);
 
     await this.prisma.refreshToken.create({
       data: {
@@ -343,5 +362,22 @@ export class AuthService {
 
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  /** Parse JWT_REFRESH_EXPIRES values like 30d / 12h / 90m into a Date. */
+  private refreshExpiresAt(refreshExpires: string): Date {
+    const match = /^(\d+)([smhd])$/i.exec(String(refreshExpires).trim());
+    const expiresAt = new Date();
+    if (!match) {
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      return expiresAt;
+    }
+    const amount = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    if (unit === 's') expiresAt.setSeconds(expiresAt.getSeconds() + amount);
+    else if (unit === 'm') expiresAt.setMinutes(expiresAt.getMinutes() + amount);
+    else if (unit === 'h') expiresAt.setHours(expiresAt.getHours() + amount);
+    else expiresAt.setDate(expiresAt.getDate() + amount);
+    return expiresAt;
   }
 }
