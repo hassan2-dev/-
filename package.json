@@ -25,6 +25,8 @@
     "update:preview": "eas update --channel preview",
     "notify:welcome": "node scripts/send-welcome-broadcast.js",
     "notify:welcome:dry": "node scripts/send-welcome-broadcast.js --dry-run",
+    "notify:iphone": "node scripts/send-iphone-update-broadcast.js",
+    "notify:iphone:dry": "node scripts/send-iphone-update-broadcast.js --dry-run",
     "submit:android": "eas submit --platform android --latest --profile production"
   },
   "dependencies": {

@@ -462,7 +462,8 @@ window.saveForceUpdateSettings = async () => {
       minIosVersion,
       minAndroidVersion,
       updateMessage,
-      iosStoreUrl: 'https://apps.apple.com/app/id6763769377',
+      iosStoreUrl:
+        'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377',
       androidStoreUrl:
         'https://play.google.com/store/apps/details?id=com.tofahastore.app',
     });

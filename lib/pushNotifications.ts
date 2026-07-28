@@ -188,6 +188,47 @@ export async function showLocalNotification(
   }
 }
 
+const DEFAULT_IOS_STORE =
+  'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
+const DEFAULT_ANDROID_STORE =
+  'https://play.google.com/store/apps/details?id=com.tofahastore.app';
+
+/** يفتح رابط المتجر من بيانات الإشعار (أو الرابط الافتراضي حسب المنصة). */
+export async function openStoreFromNotificationData(
+  data?: Record<string, unknown> | null
+): Promise<boolean> {
+  const raw = data || {};
+  const type = String(raw.type || '');
+  const explicitUrl = typeof raw.url === 'string' ? raw.url.trim() : '';
+  const iosUrl =
+    (typeof raw.iosStoreUrl === 'string' && raw.iosStoreUrl.trim()) || DEFAULT_IOS_STORE;
+  const androidUrl =
+    (typeof raw.androidStoreUrl === 'string' && raw.androidStoreUrl.trim()) ||
+    DEFAULT_ANDROID_STORE;
+
+  const shouldOpenStore =
+    Boolean(explicitUrl) ||
+    type === 'app_update' ||
+    type === 'iphone_update' ||
+    raw.openStore === true ||
+    raw.openStore === 'true';
+
+  if (!shouldOpenStore) return false;
+
+  const url =
+    explicitUrl ||
+    (Platform.OS === 'android' ? androidUrl : iosUrl);
+
+  try {
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let handledColdStartResponseId: string | null = null;
+
 export function addNotificationListeners(options: {
   onReceived?: () => void;
   onResponse?: (data: Record<string, unknown>) => void;
@@ -197,8 +238,27 @@ export function addNotificationListeners(options: {
   });
   const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = (response.notification.request.content.data || {}) as Record<string, unknown>;
+    openStoreFromNotificationData(data).catch(() => {});
     options.onResponse?.(data);
   });
+
+  // إذا فتح التطبيق من إشعار وهو مغلق — مرة واحدة فقط لكل استجابة
+  Notifications.getLastNotificationResponseAsync()
+    .then(async (response) => {
+      if (!response) return;
+      const responseId = response.notification.request.identifier;
+      if (!responseId || responseId === handledColdStartResponseId) return;
+      handledColdStartResponseId = responseId;
+      const data = (response.notification.request.content.data || {}) as Record<string, unknown>;
+      await openStoreFromNotificationData(data);
+      options.onResponse?.(data);
+      try {
+        await Notifications.clearLastNotificationResponseAsync();
+      } catch {
+        // ignore
+      }
+    })
+    .catch(() => {});
 
   return () => {
     receivedSub.remove();

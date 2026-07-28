@@ -6,6 +6,8 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -16,11 +18,18 @@ import GlassBackground from '../components/GlassBackground';
 import { AppHeader } from '../components/layout';
 import { ORDER_STATUS_LABELS } from '../lib/notificationMessages';
 
+const DEFAULT_IOS_STORE =
+  'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
+const DEFAULT_ANDROID_STORE =
+  'https://play.google.com/store/apps/details?id=com.tofahastore.app';
+
 const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   pending: 'time-outline',
   accepted: 'checkmark-circle-outline',
   preparing: 'restaurant-outline',
   on_the_way: 'bicycle-outline',
+  app_update: 'cloud-download-outline',
+  iphone_update: 'logo-apple',
 };
 
 function formatTime(value?: string) {
@@ -33,17 +42,46 @@ function formatTime(value?: string) {
   }).format(date);
 }
 
+function isStoreNotification(item: AppNotification) {
+  return (
+    Boolean(item.url) ||
+    item.type === 'app_update' ||
+    item.type === 'iphone_update'
+  );
+}
+
+async function openNotificationLink(item: AppNotification) {
+  const url =
+    item.url ||
+    (Platform.OS === 'android' ? DEFAULT_ANDROID_STORE : DEFAULT_IOS_STORE);
+  try {
+    await Linking.openURL(url);
+  } catch {
+    // ignore
+  }
+}
+
 function NotificationItem({
   item,
   isUnread,
+  onPress,
 }: {
   item: AppNotification;
   isUnread: boolean;
+  onPress?: () => void;
 }) {
-  const icon = STATUS_ICONS[item.status || ''] || 'notifications-outline';
+  const icon =
+    STATUS_ICONS[item.type || ''] ||
+    STATUS_ICONS[item.status || ''] ||
+    'notifications-outline';
+  const hasLink = isStoreNotification(item);
+  const Wrapper = hasLink ? TouchableOpacity : View;
+  const wrapperProps = hasLink
+    ? { onPress, activeOpacity: 0.85, accessibilityRole: 'link' as const }
+    : {};
 
   return (
-    <View style={[styles.card, isUnread && styles.cardUnread]}>
+    <Wrapper style={[styles.card, isUnread && styles.cardUnread]} {...wrapperProps}>
       <View style={[styles.iconWrap, isUnread && styles.iconWrapUnread]}>
         <Ionicons name={icon} size={22} color={isUnread ? Colors.primary : Colors.textGray} />
       </View>
@@ -58,9 +96,12 @@ function NotificationItem({
             {ORDER_STATUS_LABELS[item.status] || item.status}
           </Text>
         ) : null}
+        {hasLink ? (
+          <Text style={styles.linkHint}>اضغط للانتقال إلى المتجر ←</Text>
+        ) : null}
         <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
       </View>
-    </View>
+    </Wrapper>
   );
 }
 
@@ -117,7 +158,17 @@ export default function NotificationsScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <NotificationItem item={item} isUnread={!item.read} />
+          <NotificationItem
+            item={item}
+            isUnread={!item.read}
+            onPress={
+              isStoreNotification(item)
+                ? () => {
+                    openNotificationLink(item).catch(() => {});
+                  }
+                : undefined
+            }
+          />
         )}
       />
     </GlassBackground>
@@ -184,6 +235,13 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
     lineHeight: 20,
+  },
+  linkHint: {
+    marginTop: 6,
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '700',
+    textAlign: 'right',
   },
   statusTag: {
     alignSelf: 'flex-end',

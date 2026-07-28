@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/settings.dto';
 
-const DEFAULT_IOS_STORE = 'https://apps.apple.com/app/id6763769377';
+const DEFAULT_IOS_STORE =
+  'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
 const DEFAULT_ANDROID_STORE =
   'https://play.google.com/store/apps/details?id=com.tofahastore.app';
 const DEFAULT_UPDATE_MESSAGE =

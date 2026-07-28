@@ -47,6 +47,8 @@ export interface AppNotification {
   title: string;
   body: string;
   status?: string;
+  type?: string;
+  url?: string;
   createdAt?: string;
   read?: boolean;
 }
@@ -666,6 +668,8 @@ export function AppProvider({ children }: { children: any }) {
         title: n.title || 'إشعار',
         body: n.body || '',
         status: n.status,
+        type: n.type || undefined,
+        url: typeof n.url === 'string' ? n.url : undefined,
         createdAt: n.createdAt,
         read: Boolean(n.read) || readIds.has(n.id),
       }));
@@ -684,6 +688,8 @@ export function AppProvider({ children }: { children: any }) {
           await showLocalNotification(n.title, n.body, {
             orderId: n.orderId || '',
             status: n.status || '',
+            type: n.type || '',
+            url: n.url || '',
           });
           lastPush = Math.max(lastPush, t);
         }
@@ -740,10 +746,11 @@ export function AppProvider({ children }: { children: any }) {
   }, [isLoggedIn, isGuest, userEmail, userPhone, refreshNotifications, syncPushToken]);
 
   useEffect(() => {
-    if (!isLoggedIn || isGuest) return;
     return addNotificationListeners({
       onReceived: () => {
-        refreshNotifications().catch(() => {});
+        if (isLoggedIn && !isGuest) {
+          refreshNotifications().catch(() => {});
+        }
       },
     });
   }, [isLoggedIn, isGuest, refreshNotifications]);
