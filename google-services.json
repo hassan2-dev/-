@@ -7,20 +7,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:662162908373:android:994e32c8f41302644e2e5c",
+        "mobilesdk_app_id": "1:662162908373:android:8d719ff857fbc0944e2e5c",
         "android_client_info": {
-          "package_name": "com.tofahastore.app"
+          "package_name": "com.aboameer.tuffahastore2"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "662162908373-gnpct2t5j9oo074h2k8he7qnh5v6ac0i.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.tofahastore.app",
-            "certificate_hash": "b4d3fa6075d3ca1d22fade8c7dbab5afaaecb509"
-          }
-        },
         {
           "client_id": "662162908373-9n2h7mgdaeqmu2e38kp04mo56m9l1mb0.apps.googleusercontent.com",
           "client_type": 3

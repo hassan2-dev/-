@@ -53,7 +53,7 @@ export class UpdateSettingsDto {
   iosStoreUrl?: string | null;
 
   @ApiPropertyOptional({
-    example: 'https://play.google.com/store/apps/details?id=com.tofahastore.app',
+    example: 'https://play.google.com/store/apps/details?id=com.aboameer.tuffahastore2',
   })
   @IsOptional()
   @IsString()

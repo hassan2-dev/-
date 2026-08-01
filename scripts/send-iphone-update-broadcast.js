@@ -14,7 +14,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const IOS_STORE_URL =
   'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
 const ANDROID_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.tofahastore.app';
+  'https://play.google.com/store/apps/details?id=com.aboameer.tuffahastore2';
 
 const DEFAULT_TITLE = 'تحديث جديد لتطبيق تفاحة 🍎';
 const DEFAULT_BODY =

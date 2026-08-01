@@ -21,7 +21,7 @@ import { ORDER_STATUS_LABELS } from '../lib/notificationMessages';
 const DEFAULT_IOS_STORE =
   'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
 const DEFAULT_ANDROID_STORE =
-  'https://play.google.com/store/apps/details?id=com.tofahastore.app';
+  'https://play.google.com/store/apps/details?id=com.aboameer.tuffahastore2';
 
 const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   pending: 'time-outline',
