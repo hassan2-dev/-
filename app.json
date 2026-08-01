@@ -3,7 +3,7 @@
     "name": "متجر تفاحة",
     "slug": "tufaha-store",
     "owner": "hassune21",
-    "version": "1.0.7",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -56,6 +56,7 @@
     },
     "android": {
       "package": "com.aboameer.tuffahastore2",
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "POST_NOTIFICATIONS"
