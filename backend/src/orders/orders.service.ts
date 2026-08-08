@@ -11,10 +11,14 @@ import { normalizeIraqiPhone } from '../common/utils/phone.util';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
 import { AssignDriverDto } from '../drivers/dto/driver.dto';
+import { ExpoPushService } from '../notifications/expo-push.service';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly expoPush: ExpoPushService,
+  ) {}
 
   private async addTimeline(
     orderId: string,
@@ -30,6 +34,41 @@ export class OrdersService {
         note: note || null,
       },
     });
+  }
+
+  private async notifyCustomer(params: {
+    userId?: string | null;
+    phone?: string | null;
+    orderId: string;
+    title: string;
+    body: string;
+    status: string;
+  }) {
+    await this.prisma.notification.create({
+      data: {
+        userId: params.userId || undefined,
+        orderId: params.orderId,
+        title: params.title,
+        body: params.body,
+        phone: params.phone || undefined,
+        status: params.status,
+      },
+    });
+
+    await this.expoPush
+      .sendToUser(
+        { userId: params.userId, phone: params.phone },
+        {
+          title: params.title,
+          body: params.body,
+          data: {
+            orderId: params.orderId,
+            status: params.status,
+          },
+          channelId: 'orders',
+        },
+      )
+      .catch(() => ({ sent: 0, errors: 0, devices: 0 }));
   }
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -54,15 +93,13 @@ export class OrdersService {
 
     await this.addTimeline(order.id, 'Created', user.id, 'تم إنشاء الطلب');
 
-    await this.prisma.notification.create({
-      data: {
-        userId: user.id,
-        orderId: order.id,
-        title: 'تم استلام طلبك',
-        body: `طلبك رقم ${order.id.slice(-6)} قيد المراجعة`,
-        phone,
-        status: OrderStatus.PENDING,
-      },
+    await this.notifyCustomer({
+      userId: user.id,
+      phone,
+      orderId: order.id,
+      title: 'تم استلام طلبك',
+      body: `طلبك رقم ${order.id.slice(-6)} قيد المراجعة`,
+      status: OrderStatus.PENDING,
     });
 
     await this.prisma.auditLog.create({
@@ -180,15 +217,13 @@ export class OrdersService {
       `تعيين للمندوب ${driver.name || driver.username}`,
     );
 
-    await this.prisma.notification.create({
-      data: {
-        userId: dto.driverId,
-        orderId: id,
-        title: 'لديك طلب جديد',
-        body: `تم تعيين طلب #${id.slice(-6)} لك — ${order.name}`,
-        phone: driver.phone,
-        status: 'Assigned',
-      },
+    await this.notifyCustomer({
+      userId: dto.driverId,
+      phone: driver.phone,
+      orderId: id,
+      title: 'لديك طلب جديد',
+      body: `تم تعيين طلب #${id.slice(-6)} لك — ${order.name}`,
+      status: 'Assigned',
     });
 
     return updated;
@@ -280,21 +315,6 @@ export class OrdersService {
       body: 'تم تحديث حالة طلبك',
     };
 
-    // Customer notification
-    if (user.role !== Role.DRIVER || dto.status !== OrderStatus.ACCEPTED) {
-      await this.prisma.notification.create({
-        data: {
-          userId: order.userId,
-          orderId: order.id,
-          title: message.title,
-          body: message.body,
-          phone: order.phone,
-          status: dto.status,
-        },
-      });
-    }
-
-    // Admin sees driver accepted via acceptedAt; also notify if driver accepted
     if (user.role === Role.DRIVER && dto.status === OrderStatus.ACCEPTED) {
       await this.prisma.notification.create({
         data: {
@@ -304,17 +324,16 @@ export class OrdersService {
           status: 'DriverAccepted',
         },
       });
-      await this.prisma.notification.create({
-        data: {
-          userId: order.userId,
-          orderId: order.id,
-          title: message.title,
-          body: message.body,
-          phone: order.phone,
-          status: dto.status,
-        },
-      });
     }
+
+    await this.notifyCustomer({
+      userId: order.userId,
+      phone: order.phone,
+      orderId: order.id,
+      title: message.title,
+      body: message.body,
+      status: dto.status,
+    });
 
     await this.prisma.auditLog.create({
       data: {

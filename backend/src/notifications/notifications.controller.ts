@@ -20,6 +20,12 @@ export class NotificationsController {
     return this.notifications.findMine(user);
   }
 
+  @Roles(Role.ADMIN)
+  @Get('push-tokens/stats')
+  pushTokenStats() {
+    return this.notifications.pushTokenStats();
+  }
+
   @Patch(':id/read')
   markRead(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.notifications.markRead(id, user);

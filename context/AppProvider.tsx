@@ -31,7 +31,7 @@ import {
 } from '../lib/pushNotifications';
 import { Category, Product, CartItem, StoreSettings } from '../lib/types';
 import { normalizeProduct } from '../lib/productImage';
-import { DELIVERY_COST } from '../lib/theme';
+import { calcDeliveryFee } from '../lib/delivery';
 import {
   DEFAULT_STORE_SETTINGS,
   isStoreOpen as checkStoreOpen,
@@ -618,7 +618,7 @@ export function AppProvider({ children }: { children: any }) {
       }
     });
     const discount = subtotal - discountedTotal;
-    const delivery = discountedTotal > 0 ? DELIVERY_COST : 0;
+    const delivery = discountedTotal > 0 ? calcDeliveryFee(cart) : 0;
     const total = discountedTotal + delivery;
     return { subtotal, discount, delivery, total };
   }, [cart]);

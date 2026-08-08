@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class BroadcastDto {
@@ -11,6 +11,11 @@ export class BroadcastDto {
   @IsString()
   @MinLength(1)
   body!: string;
+
+  @ApiPropertyOptional({ description: 'Extra Expo push data (string values)' })
+  @IsOptional()
+  @IsObject()
+  data?: Record<string, string>;
 }
 
 export class RegisterPushTokenDto {

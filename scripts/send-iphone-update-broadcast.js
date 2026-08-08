@@ -1,20 +1,25 @@
 /**
- * إشعار: يتوفر تحديث للتطبيق — عند الضغط يفتح App Store / Play Store.
- * (ليس تحديثاً إجبارياً — فقط إشعار مع رابط)
+ * إشعار تحديث التطبيق عبر Nest API (Postgres tokens + Expo Push).
+ * عند الضغط يفتح App Store / Play Store.
  *
  * الاستخدام:
+ *   set ADMIN_USERNAME=admin
+ *   set ADMIN_PASSWORD=...
  *   npm run notify:iphone
  *   npm run notify:iphone:dry
- *   node scripts/send-iphone-update-broadcast.js --dry-run
+ *
+ * اختياري: API_BASE=https://api.tofahastore.com/api/v1
  */
 
-const { FIRESTORE_BASE, getAnonymousIdToken } = require('./firebase-auth');
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const API_BASE =
+  process.env.API_BASE ||
+  process.env.TOFAHA_API_BASE ||
+  'https://api.tofahastore.com/api/v1';
 
 const IOS_STORE_URL =
   'https://apps.apple.com/us/app/%D9%85%D8%AA%D8%AC%D8%B1-%D8%AA%D9%81%D8%A7%D8%AD%D8%A9/id6763769377';
 const ANDROID_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.aboameer.tuffahastore2';
+  'https://play.google.com/store/apps/details?id=com.tofahastore.app';
 
 const DEFAULT_TITLE = 'تحديث جديد لتطبيق تفاحة 🍎';
 const DEFAULT_BODY =
@@ -47,228 +52,129 @@ function parseArgs(argv) {
   return args;
 }
 
-function parseFirestoreValue(value) {
-  if (!value || typeof value !== 'object') return null;
-  if ('stringValue' in value) return value.stringValue;
-  if ('booleanValue' in value) return value.booleanValue;
-  if ('integerValue' in value) return Number(value.integerValue);
-  if ('doubleValue' in value) return Number(value.doubleValue);
-  if ('timestampValue' in value) return value.timestampValue;
-  return null;
-}
-
-function parseFirestoreDoc(doc) {
-  const fields = doc.fields || {};
-  const result = {};
-  for (const key of Object.keys(fields)) {
-    result[key] = parseFirestoreValue(fields[key]);
-  }
-  return result;
-}
-
-function toFirestoreValue(value) {
-  if (value === null || value === undefined) return { nullValue: null };
-  if (typeof value === 'string') return { stringValue: value };
-  if (typeof value === 'boolean') return { booleanValue: value };
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) return { integerValue: String(value) };
-    return { doubleValue: value };
-  }
-  return { stringValue: String(value) };
-}
-
-async function fetchAllPushTokens() {
-  const tokens = [];
-  let pageToken;
-
-  do {
-    const params = new URLSearchParams({ pageSize: '300' });
-    if (pageToken) params.set('pageToken', pageToken);
-
-    const res = await fetch(`${FIRESTORE_BASE}/push_tokens?${params}`);
-    if (!res.ok) {
-      throw new Error(`تعذر قراءة push_tokens (${res.status})`);
-    }
-
-    const json = await res.json();
-    for (const doc of json.documents || []) {
-      const data = parseFirestoreDoc(doc);
-      if (data.token) {
-        tokens.push({
-          token: data.token,
-          platform: String(data.platform || '').toLowerCase(),
-        });
-      }
-    }
-    pageToken = json.nextPageToken;
-  } while (pageToken);
-
-  const byToken = new Map();
-  for (const row of tokens) {
-    byToken.set(row.token, row);
-  }
-  return [...byToken.values()];
-}
-
-async function createBroadcastNotification(title, body, url) {
-  const token = await getAnonymousIdToken();
-  const fields = {
-    phone: toFirestoreValue(''),
-    email: toFirestoreValue(''),
-    title: toFirestoreValue(title),
-    body: toFirestoreValue(body),
-    broadcast: toFirestoreValue(true),
-    read: toFirestoreValue(false),
-    type: toFirestoreValue('app_update'),
-    url: toFirestoreValue(url),
-    createdAt: { timestampValue: new Date().toISOString() },
-  };
-
-  const res = await fetch(`${FIRESTORE_BASE}/notifications`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ fields }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`تعذر حفظ الإشعار في Firestore (${res.status}): ${text}`);
-  }
-
-  const json = await res.json();
-  const nameParts = String(json.name || '').split('/');
-  return nameParts[nameParts.length - 1] || 'unknown';
-}
-
-async function sendExpoPushBatch(messages) {
-  const res = await fetch(EXPO_PUSH_URL, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Accept-encoding': 'gzip, deflate',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(messages),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`Expo Push API error (${res.status}): ${JSON.stringify(data)}`);
-  }
-
-  const tickets = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [data];
-  const errors = tickets.filter((ticket) => ticket?.status === 'error').length;
-  return { sent: messages.length - errors, errors };
-}
-
-function storeUrlForPlatform(platform, iosUrl, androidUrl) {
-  if (platform === 'android') return androidUrl;
-  // iOS أو غير معروف → App Store (أغلب الأجهزة عندكم)
-  return iosUrl;
-}
-
-async function deliverExpoPush({ title, body, devices, iosUrl, androidUrl }) {
-  if (!devices.length) return { sent: 0, errors: 0, devices: 0 };
-
-  const messages = devices.map(({ token, platform }) => {
-    const url = storeUrlForPlatform(platform, iosUrl, androidUrl);
-    return {
-      to: token,
-      title,
-      body,
-      data: {
-        broadcast: 'true',
-        type: 'app_update',
-        url,
-        iosStoreUrl: iosUrl,
-        androidStoreUrl: androidUrl,
-      },
-      sound: 'default',
-      channelId: 'general',
-    };
-  });
-
-  let sent = 0;
-  let errors = 0;
-  for (let i = 0; i < messages.length; i += 100) {
-    const chunk = messages.slice(i, i + 100);
-    const result = await sendExpoPushBatch(chunk);
-    sent += result.sent;
-    errors += result.errors;
-  }
-
-  return { sent, errors, devices: devices.length };
-}
-
 function printHelp() {
   console.log(`
-إشعار تحديث التطبيق (مع رابط المتجر — بدون إجبار)
+إشعار تحديث التطبيق عبر Nest (مع رابط المتجر)
 
 الاستخدام:
+  set ADMIN_USERNAME=admin
+  set ADMIN_PASSWORD=كلمة_السر
   npm run notify:iphone
   npm run notify:iphone:dry
 
-عند ضغط الإشعار يفتح App Store / Play Store.
-
-النص الافتراضي:
-  العنوان: ${DEFAULT_TITLE}
-  النص:    ${DEFAULT_BODY}
-  iOS:     ${IOS_STORE_URL}
+متغيرات البيئة:
+  API_BASE          افتراضي: ${API_BASE}
+  ADMIN_USERNAME    مطلوب للإرسال
+  ADMIN_PASSWORD    مطلوب للإرسال
 `);
+}
+
+async function adminLogin() {
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const password = process.env.ADMIN_PASSWORD || '';
+  if (!password) {
+    throw new Error(
+      'ضع ADMIN_PASSWORD في البيئة ثم أعد التشغيل (حساب أدمن Nest).',
+    );
+  }
+
+  const res = await fetch(`${API_BASE}/auth/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `فشل تسجيل دخول الأدمن (${res.status}): ${json?.message || JSON.stringify(json)}`,
+    );
+  }
+  const data = json?.data ?? json;
+  const token = data?.accessToken;
+  if (!token) throw new Error('لم يُرجع السيرفر accessToken');
+  return token;
+}
+
+async function fetchPushStats(accessToken) {
+  const res = await fetch(`${API_BASE}/notifications/push-tokens/stats`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `تعذر قراءة إحصائيات التوكن (${res.status}): ${json?.message || ''}`,
+    );
+  }
+  const data = json?.data ?? json;
+  return Number(data?.devices || 0);
+}
+
+async function sendBroadcast(accessToken, { title, body, data }) {
+  const res = await fetch(`${API_BASE}/notifications/broadcast`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ title, body, data }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `فشل البث (${res.status}): ${json?.message || JSON.stringify(json)}`,
+    );
+  }
+  return json?.data ?? json;
 }
 
 async function main() {
   const args = parseArgs(process.argv);
-
   if (args.help) {
     printHelp();
     process.exit(0);
   }
 
-  console.log('--- إشعار تحديث (رابط المتجر) ---');
+  console.log('--- إشعار تحديث (Nest API + رابط المتجر) ---');
+  console.log('API:    ', API_BASE);
   console.log('العنوان:', args.title);
   console.log('النص:   ', args.body);
   console.log('App Store:', args.iosUrl);
-  console.log('Play Store:', args.androidUrl);
   if (args.dryRun) console.log('الوضع:   تجريبي (بدون إرسال)');
 
-  const devices = await fetchAllPushTokens();
-  console.log(`\nأجهزة مسجّلة: ${devices.length}`);
+  const accessToken = await adminLogin();
+  const devices = await fetchPushStats(accessToken);
+  console.log(`\nأجهزة مسجّلة (Postgres): ${devices}`);
 
   if (args.dryRun) {
     console.log('\n[dry-run] تم التخطي — لم يُرسل شيء.');
     return;
   }
 
-  // داخل التطبيق: رابط App Store (يفتح من شاشة الإشعارات)
-  const notifId = await createBroadcastNotification(
-    args.title,
-    args.body,
-    args.iosUrl,
-  );
-  console.log(`تم حفظ الإشعار داخل التطبيق: ${notifId}`);
-
-  const pushResult = await deliverExpoPush({
+  const result = await sendBroadcast(accessToken, {
     title: args.title,
     body: args.body,
-    devices,
-    iosUrl: args.iosUrl,
-    androidUrl: args.androidUrl,
+    data: {
+      type: 'app_update',
+      url: args.iosUrl,
+      iosStoreUrl: args.iosUrl,
+      androidStoreUrl: args.androidUrl,
+      openStore: 'true',
+    },
   });
 
-  if (pushResult.devices === 0) {
-    console.log('\nتم حفظ الإشعار داخل التطبيق — لا توجد أجهزة مسجّلة للـ Push بعد.');
-    return;
+  const push = result?.push || {};
+  console.log(`تم حفظ الإشعار: ${result?.notification?.id || 'ok'}`);
+  console.log(
+    `Push: أُرسل إلى ${push.sent ?? 0} من ${push.devices ?? devices} جهاز`,
+  );
+  if (push.errors > 0) {
+    console.log(`تحذير: فشل ${push.errors} جهاز`);
   }
-
-  console.log(`\nPush: أُرسل إلى ${pushResult.sent} جهاز`);
-  if (pushResult.errors > 0) {
-    console.log(`تحذير: فشل ${pushResult.errors} جهاز (توكن قديم أو غير صالح)`);
-  }
-  console.log('\nتم بنجاح — الضغط على الإشعار يفتح المتجر.');
+  console.log('\nتم بنجاح.');
 }
 
 main().catch((error) => {

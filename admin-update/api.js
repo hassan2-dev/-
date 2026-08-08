@@ -211,11 +211,12 @@ export const SettingsApi = {
 };
 
 export const NotificationsApi = {
-  broadcast: (title, body) =>
+  broadcast: (title, body, data) =>
     api('/notifications/broadcast', {
       method: 'POST',
-      body: JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body, ...(data ? { data } : {}) }),
     }),
+  pushTokenStats: () => api('/notifications/push-tokens/stats'),
 };
 
 export async function uploadImageFile(file, folder = 'uploads') {

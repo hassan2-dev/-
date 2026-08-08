@@ -953,10 +953,20 @@ window.deleteDocItem = async (col, id, unused, cb) => {
 window.loadPushTokenStats = async () => {
   const statsEl = document.getElementById('push-token-stats');
   if (!statsEl) return;
-  statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
+  try {
+    const data = await NotificationsApi.pushTokenStats();
+    const devices = Number(data?.devices || 0);
+    statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
         <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة الإشعارات</h3>
-        <p class="order-meta">إحصائيات الدفع ستُربط بعد تفعيل Expo Push على الـ API</p>
+        <h2>${devices.toLocaleString('ar-IQ')}</h2>
+        <p class="order-meta">أجهزة مسجّلة لـ Expo Push</p>
     </div>`;
+  } catch (e) {
+    statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
+        <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة الإشعارات</h3>
+        <p class="order-meta">${e.message || 'تعذر تحميل الإحصائيات'}</p>
+    </div>`;
+  }
 };
 
 window.sendBroadcastNotification = async () => {
@@ -969,10 +979,18 @@ window.sendBroadcastNotification = async () => {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
   }
   try {
-    await NotificationsApi.broadcast(title, body);
-    showCustomAlert('تم حفظ البث في قاعدة البيانات (بدون Push بعد)');
+    const result = await NotificationsApi.broadcast(title, body);
+    const push = result?.push || {};
+    const sent = Number(push.sent || 0);
+    const devices = Number(push.devices || 0);
+    showCustomAlert(
+      devices > 0
+        ? `تم البث — Push إلى ${sent} من ${devices} جهاز`
+        : 'تم حفظ الإشعار — لا توجد أجهزة مسجّلة للـ Push بعد',
+    );
     document.getElementById('broadcast-title').value = '';
     document.getElementById('broadcast-body').value = '';
+    loadPushTokenStats();
   } catch (e) {
     showCustomAlert(e.message || 'تعذر الإرسال');
   } finally {
