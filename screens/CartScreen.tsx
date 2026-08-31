@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Keyboa
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Colors, FontSize, Spacing, BorderRadius, Layout, getFooterBottomPadding } from '../lib/theme';
+import { Colors, FontSize, Spacing, BorderRadius, Layout, getFooterBottomPadding, DELIVERY_COST } from '../lib/theme';
 import { useApp } from '../context/AppProvider';
+import { countWaterSets } from '../lib/delivery';
 import { fetchCustomerOrders } from '../lib/customerOrders';
 import { isValidIraqiPhone, normalizeIraqiPhone } from '../lib/phone';
 import { rtlInput } from '../lib/rtl';
@@ -478,6 +479,11 @@ export default function CartScreen({ mode = 'stack' }: Props) {
                 <Text style={styles.summaryLabel}>التوصيل</Text>
                 <Text style={styles.summaryValue}>{totals.delivery.toLocaleString()} د.ع</Text>
               </View>
+              {countWaterSets(cart) > 1 ? (
+                <Text style={styles.waterDeliveryNote}>
+                  توصيل الماء: {countWaterSets(cart)} ستات × {DELIVERY_COST.toLocaleString()} د.ع (ذهاب ورجوع لكل ست)
+                </Text>
+              ) : null}
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>الإجمالي</Text>
                 <Text style={styles.totalValue}>{totals.total.toLocaleString()} د.ع</Text>
@@ -616,6 +622,13 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
     fontSize: FontSize.sm,
     fontWeight: '500',
+  },
+  waterDeliveryNote: {
+    color: Colors.primary,
+    fontSize: FontSize.xs,
+    textAlign: 'right',
+    marginBottom: Spacing.sm,
+    lineHeight: 18,
   },
   totalRow: {
     borderTopWidth: 1,

@@ -1,5 +1,6 @@
 /**
- * Admin dashboard wired to NestJS API (no Firestore).
+ * Admin dashboard wired to NestJS API (no Firestore for catalog/orders).
+ * Web Push for admin order alerts still uses Firebase subscriptions + Vercel notify API.
  */
 import {
   AuthApi,
@@ -34,6 +35,27 @@ import {
   stopDriverPolling,
   enrichOrderCardHtml,
 } from './catalog-drivers.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
+import {
+  getAuth,
+  signInAnonymously,
+} from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
+import { getFirestore } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+import { FIREBASE_CONFIG, ADMIN_NOTIFY_SECRET } from './firebase-config.js';
+import {
+  initWebPush,
+  isWebPushReady,
+  describeWebPushFailure,
+} from './web-push-admin.js';
+
+const firebaseApp = initializeApp(FIREBASE_CONFIG);
+const firebaseAuth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const ADMIN_NOTIFY_API = `${window.location.origin}/api/notify-order`;
+
+signInAnonymously(firebaseAuth).catch((err) => {
+  console.warn('[Firebase anon]', err?.message || err);
+});
 
 let allProducts = [];
 let allCategories = [];
@@ -298,6 +320,11 @@ async function pollPendingOrders() {
             new Notification(title, { body, tag: `tofaha-new-${order.id}` });
           } catch (_) {}
         }
+        sendAdminPushNotify({
+          title,
+          body,
+          data: { type: 'new_order', orderId: order.id },
+        }).catch(() => {});
         const active =
           document.querySelector('.tab-content.active')?.id || '';
         if (active === 'orders') window.loadOrders('pending');
@@ -953,10 +980,20 @@ window.deleteDocItem = async (col, id, unused, cb) => {
 window.loadPushTokenStats = async () => {
   const statsEl = document.getElementById('push-token-stats');
   if (!statsEl) return;
-  statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
+  try {
+    const data = await NotificationsApi.pushTokenStats();
+    const devices = Number(data?.devices || 0);
+    statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
         <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة الإشعارات</h3>
-        <p class="order-meta">إحصائيات الدفع ستُربط بعد تفعيل Expo Push على الـ API</p>
+        <h2>${devices.toLocaleString('ar-IQ')}</h2>
+        <p class="order-meta">أجهزة مسجّلة لـ Expo Push</p>
     </div>`;
+  } catch (e) {
+    statsEl.innerHTML = `<div class="sales-card card-3d push-stats-card">
+        <h3><i class="fa-solid fa-mobile-screen"></i> أجهزة الإشعارات</h3>
+        <p class="order-meta">${e.message || 'تعذر تحميل الإحصائيات'}</p>
+    </div>`;
+  }
 };
 
 window.sendBroadcastNotification = async () => {
@@ -969,10 +1006,18 @@ window.sendBroadcastNotification = async () => {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
   }
   try {
-    await NotificationsApi.broadcast(title, body);
-    showCustomAlert('تم حفظ البث في قاعدة البيانات (بدون Push بعد)');
+    const result = await NotificationsApi.broadcast(title, body);
+    const push = result?.push || {};
+    const sent = Number(push.sent || 0);
+    const devices = Number(push.devices || 0);
+    showCustomAlert(
+      devices > 0
+        ? `تم البث — Push إلى ${sent} من ${devices} جهاز`
+        : 'تم حفظ الإشعار — لا توجد أجهزة مسجّلة للـ Push بعد',
+    );
     document.getElementById('broadcast-title').value = '';
     document.getElementById('broadcast-body').value = '';
+    loadPushTokenStats();
   } catch (e) {
     showCustomAlert(e.message || 'تعذر الإرسال');
   } finally {
@@ -996,14 +1041,155 @@ window.sendUserNotification = async () => {
   showCustomAlert('إشعار لمستخدم محدد سيُضاف قريباً على الـ API');
 };
 
-// stubs used by leftover HTML buttons
-window.enableBrowserNotifications = async () => {
-  if (!('Notification' in window)) return;
-  await Notification.requestPermission();
+async function sendAdminPushNotify({ title, body, data = {} }) {
+  if (!ADMIN_NOTIFY_SECRET) return { ok: false, error: 'missing_secret' };
+  try {
+    const response = await fetch(ADMIN_NOTIFY_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-notify-secret': ADMIN_NOTIFY_SECRET,
+      },
+      body: JSON.stringify({ title, body, data }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, ...payload, httpStatus: response.status };
+    }
+    return payload;
+  } catch (error) {
+    console.warn('[notify-api]', error);
+    return { ok: false, error: error?.message || 'network_error' };
+  }
+}
+
+function describeNotifyApiFailure(result) {
+  if (result?.error === 'missing_vapid_env') {
+    return 'أضف VAPID_PUBLIC_KEY و VAPID_PRIVATE_KEY في Vercel ثم اعمل Redeploy';
+  }
+  if (result?.error === 'unauthorized') {
+    return 'ADMIN_NOTIFY_SECRET غير صحيح في Vercel';
+  }
+  if (result?.message === 'no_subscriptions') {
+    return 'ماكو اشتراك محفوظ — اضغط تفعيل Web Push مرة ثانية';
+  }
+  if (result?.httpStatus === 404) {
+    return 'API غير موجود — انشر الأدمن: npm run deploy:admin';
+  }
+  return result?.error || 'تحقق من إعدادات Vercel';
+}
+
+function setWebPushButtonsLoading(loading) {
+  document.querySelectorAll('[data-web-push-btn]').forEach((btn) => {
+    btn.disabled = loading;
+    if (loading) {
+      if (!btn.dataset.defaultHtml) btn.dataset.defaultHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التفعيل...';
+    } else if (btn.dataset.defaultHtml) {
+      btn.innerHTML = btn.dataset.defaultHtml;
+    }
+  });
+}
+
+function updatePwaStatusBanner(result) {
+  const el = document.getElementById('fcm-status-banner');
+  if (!el) return;
+
+  if (result?.ok || isWebPushReady()) {
+    el.className = 'fcm-status-banner success';
+    el.innerHTML =
+      '<i class="fa-solid fa-circle-check"></i> Web Push مفعّل — وهو مفتوح يشتغل مباشرة، وهو مسكّر يحتاج طلب من تطبيق الزبون';
+    return;
+  }
+
+  if (result?.reason === 'denied') {
+    el.className = 'fcm-status-banner warning';
+    el.innerHTML =
+      '<i class="fa-solid fa-bell-slash"></i> اسمح بالإشعارات ثم اضغط التفعيل';
+    return;
+  }
+
+  el.className = 'fcm-status-banner muted';
+  el.innerHTML =
+    '<i class="fa-solid fa-mobile-screen"></i> فعّل Web Push وثبّت التطبيق (PWA) على جهازك';
+}
+
+function updateBrowserNotifButton() {
+  const btn = document.getElementById('enable-browser-notif-btn');
+  if (!btn) return;
+  const canNotify = 'Notification' in window;
+  const granted = canNotify && Notification.permission === 'granted' && isWebPushReady();
+  btn.classList.toggle('hidden', !canNotify || granted);
+}
+
+async function setupWebPushNotifications() {
+  const result = await initWebPush(db);
+  updatePwaStatusBanner(result);
+  updateBrowserNotifButton();
+  if (result.ok && typeof window.loadPushTokenStats === 'function') {
+    window.loadPushTokenStats();
+  }
+  return result;
+}
+
+window.requestAdminBrowserNotifications = async () => {
+  setWebPushButtonsLoading(true);
+  try {
+    const result = await setupWebPushNotifications();
+    if (result.ok) {
+      const pushTest = await sendAdminPushNotify({
+        title: '🔔 تم تفعيل الإشعارات',
+        body: 'إذا وصلك هذا والتطبيق مسكّر — كل شي شغّال ✅',
+        data: { type: 'test' },
+      });
+      if (pushTest?.sent > 0) {
+        showCustomAlert('تم التفعيل ✅ — أغلق التبويب وجرّب طلب جديد من الزبون');
+      } else {
+        showCustomAlert(
+          `تم السماح محلياً، لكن السيرفر ما أرسل إشعار:\n${describeNotifyApiFailure(pushTest)}`,
+        );
+      }
+      return;
+    }
+    showCustomAlert(describeWebPushFailure(result));
+  } catch (error) {
+    console.error('[WebPush] button failed', error);
+    showCustomAlert(error?.message || 'حدث خطأ غير متوقع');
+  } finally {
+    setWebPushButtonsLoading(false);
+  }
 };
-window.setupWebPushNotifications = async () => {};
+
+window.testAdminWebPush = async () => {
+  if (!isWebPushReady()) {
+    showCustomAlert('فعّل Web Push أولاً من الزر أعلاه');
+    return;
+  }
+  const result = await sendAdminPushNotify({
+    title: '🔔 اختبار Web Push',
+    body: 'إذا وصلك هذا — الإشعارات شغّالة ✅',
+    data: { type: 'test' },
+  });
+  if (result?.sent > 0) {
+    showCustomAlert(`تم الإرسال إلى ${result.sent} جهاز`);
+    return;
+  }
+  showCustomAlert(describeNotifyApiFailure(result));
+};
+
+window.setupAdminFcmLegacy = async () => {
+  showCustomAlert('استخدم Web Push أعلاه — Firebase FCM معطّل لتجنّب تكرار الإشعارات');
+};
+
+window.enableBrowserNotifications = window.requestAdminBrowserNotifications;
+window.setupWebPushNotifications = setupWebPushNotifications;
 window.updatePwaInstallButtons = () => {};
 
 wireLoginMode();
 wireCatalogFilters();
 initAdminSession();
+
+// Restore banner state if permission already granted
+if ('Notification' in window && Notification.permission === 'granted') {
+  setupWebPushNotifications().catch(() => {});
+}

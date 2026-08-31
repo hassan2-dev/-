@@ -5,10 +5,14 @@ import {
   BroadcastDto,
   RegisterPushTokenDto,
 } from './dto/notification.dto';
+import { ExpoPushService } from './expo-push.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly expoPush: ExpoPushService,
+  ) {}
 
   findMine(user: AuthUser) {
     return this.prisma.notification.findMany({
@@ -43,14 +47,32 @@ export class NotificationsService {
     });
   }
 
-  broadcast(dto: BroadcastDto) {
-    return this.prisma.notification.create({
+  async broadcast(dto: BroadcastDto) {
+    const notification = await this.prisma.notification.create({
       data: {
         title: dto.title,
         body: dto.body,
         broadcast: true,
       },
     });
+
+    const pushData: Record<string, string> = {
+      broadcast: 'true',
+      ...(dto.data || {}),
+    };
+
+    const push = await this.expoPush.sendBroadcast({
+      title: dto.title,
+      body: dto.body,
+      data: pushData,
+      channelId: 'general',
+    });
+
+    return { notification, push };
+  }
+
+  pushTokenStats() {
+    return this.expoPush.countTokens().then((devices) => ({ devices }));
   }
 
   registerPushToken(user: AuthUser, dto: RegisterPushTokenDto) {
