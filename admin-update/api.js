@@ -186,6 +186,8 @@ export const OrdersApi = {
       method: 'PATCH',
       body: JSON.stringify({ driverId, confirmReassign }),
     }),
+  resetSales: () => api('/orders/reset-sales', { method: 'POST' }),
+  remove: (id) => api(`/orders/${id}`, { method: 'DELETE' }),
 };
 
 export const DriversApi = {

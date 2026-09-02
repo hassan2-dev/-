@@ -954,7 +954,22 @@ window.loadSales = async () => {
 };
 
 window.resetSales = async () => {
-  showCustomAlert('تصفير المبيعات غير متاح حالياً على الـ API — قريباً');
+  if (!confirm('هل أنت متأكد من تصفير المبيعات وحذف كل الطلبات المقبولة والنشطة؟')) {
+    return;
+  }
+  try {
+    const result = await OrdersApi.resetSales();
+    const deleted = Number(result?.deleted || 0);
+    showCustomAlert(
+      deleted
+        ? `تم تصفير المبيعات وحذف ${deleted.toLocaleString('ar-IQ')} طلب نشط`
+        : 'لا توجد طلبات نشطة للحذف',
+    );
+    await window.loadSales();
+    await window.loadOrders('accepted');
+  } catch (e) {
+    showCustomAlert(e.message || 'تعذر تصفير المبيعات');
+  }
 };
 
 window.deleteDocItem = async (col, id, unused, cb) => {
@@ -964,10 +979,8 @@ window.deleteDocItem = async (col, id, unused, cb) => {
     else if (col === 'products') await ProductsApi.remove(id);
     else if (col === 'banners') await BannersApi.remove(id);
     else if (col === 'offers') await OffersApi.remove(id);
-    else if (col === 'orders') {
-      showCustomAlert('حذف الطلبات غير متاح حالياً');
-      return;
-    } else {
+    else if (col === 'orders') await OrdersApi.remove(id);
+    else {
       showCustomAlert('حذف غير مدعوم');
       return;
     }

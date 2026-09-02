@@ -1,13 +1,16 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OrderStatus, Role } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -43,9 +46,28 @@ export class OrdersController {
     return this.orders.findAll(status);
   }
 
+  @Roles(Role.ADMIN)
+  @Post('reset-sales')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset active sales',
+    description:
+      'Deletes accepted, preparing, and on-the-way orders so the sales total resets.',
+  })
+  resetSales(@CurrentUser() user: AuthUser) {
+    return this.orders.resetSales(user);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.orders.findOne(id, user);
+  }
+
+  @Roles(Role.ADMIN)
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an order' })
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.remove(id, user);
   }
 
   @Roles(Role.ADMIN)

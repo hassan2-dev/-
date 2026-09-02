@@ -355,4 +355,46 @@ export class OrdersService {
 
     return updated;
   }
+
+  async resetSales(user: AuthUser) {
+    const statuses: OrderStatus[] = [
+      OrderStatus.ACCEPTED,
+      OrderStatus.PREPARING,
+      OrderStatus.ON_THE_WAY,
+    ];
+
+    const result = await this.prisma.order.deleteMany({
+      where: { status: { in: statuses } },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'SALES_RESET',
+        entity: 'Order',
+        metadata: { deleted: result.count, statuses },
+      },
+    });
+
+    return { deleted: result.count };
+  }
+
+  async remove(id: string, user: AuthUser) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundException('الطلب غير موجود');
+
+    await this.prisma.order.delete({ where: { id } });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'ORDER_DELETED',
+        entity: 'Order',
+        entityId: id,
+        metadata: { status: order.status },
+      },
+    });
+
+    return { deleted: true };
+  }
 }
